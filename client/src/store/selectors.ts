@@ -21,6 +21,10 @@ export function entitiesInOrbit(state: ModelState, orbitId: string): Entity[] {
   return [...state.entities.values()].filter((e) => e.orbitId === orbitId);
 }
 
+export function ungroupedEntitiesInSpace(state: ModelState, spaceId: string): Entity[] {
+  return entitiesInSpace(state, spaceId).filter((e) => e.orbitId === undefined);
+}
+
 export function relationshipsForEntity(state: ModelState, entityId: string): Relationship[] {
   return [...state.relationships.values()].filter(
     (r) => r.sourceId === entityId || r.targetId === entityId,

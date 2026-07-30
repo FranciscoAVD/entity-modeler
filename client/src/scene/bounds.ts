@@ -1,4 +1,4 @@
-import { entitiesInOrbit, entitiesInSpace, orbitsInSpace } from "@/store/selectors";
+import { entitiesInOrbit, orbitsInSpace, ungroupedEntitiesInSpace } from "@/store/selectors";
 import type { ModelState } from "@/store/store";
 import type { Vector3 } from "@/store/types";
 
@@ -19,9 +19,7 @@ function radiusForPoints(points: Vector3[]): number {
 // A space's boundary must contain its orbits (as nested spheres) and any ungrouped entities.
 export function computeSpaceRadius(state: ModelState, spaceId: string): number {
   const orbitPoints = orbitsInSpace(state, spaceId).map((o) => o.origin);
-  const ungroupedPoints = entitiesInSpace(state, spaceId)
-    .filter((e) => e.orbitId === undefined)
-    .map((e) => e.position);
+  const ungroupedPoints = ungroupedEntitiesInSpace(state, spaceId).map((e) => e.position);
   return radiusForPoints([...orbitPoints, ...ungroupedPoints]);
 }
 
@@ -32,7 +30,7 @@ export function computeOrbitRadius(state: ModelState, orbitId: string): number {
 // A space with an (even empty) orbit is still visually populated by that orbit's sphere.
 export function isSpaceEmpty(state: ModelState, spaceId: string): boolean {
   const hasOrbits = orbitsInSpace(state, spaceId).length > 0;
-  const hasUngroupedEntities = entitiesInSpace(state, spaceId).some((e) => e.orbitId === undefined);
+  const hasUngroupedEntities = ungroupedEntitiesInSpace(state, spaceId).length > 0;
   return !hasOrbits && !hasUngroupedEntities;
 }
 

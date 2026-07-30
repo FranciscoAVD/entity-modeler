@@ -1,12 +1,16 @@
+import { useShallow } from "zustand/react/shallow";
+import { entitiesInOrbit } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Orbit } from "@/store/types";
 import { BoundaryLabel } from "./BoundaryLabel";
 import { BoundarySphere } from "./BoundarySphere";
 import { computeOrbitRadius, isOrbitEmpty } from "./bounds";
 import { ORBIT_COLOR } from "./colors";
+import { EntityNode } from "./EntityNode";
 import { useViewStore } from "./viewStore";
 
 export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
+  const entities = useModelStore(useShallow((state) => entitiesInOrbit(state, orbit.id)));
   const radius = useModelStore((state) => computeOrbitRadius(state, orbit.id));
   const empty = useModelStore((state) => isOrbitEmpty(state, orbit.id));
   const hidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
@@ -17,6 +21,9 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
     <group position={[orbit.origin.x, orbit.origin.y, orbit.origin.z]}>
       <BoundarySphere radius={radius} color={ORBIT_COLOR} empty={empty} />
       <BoundaryLabel text={orbit.label ?? orbit.name} radius={radius} color={ORBIT_COLOR} dimmer />
+      {entities.map((entity) => (
+        <EntityNode key={entity.id} entity={entity} />
+      ))}
     </group>
   );
 }
