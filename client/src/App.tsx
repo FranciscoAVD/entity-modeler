@@ -1,9 +1,17 @@
+import { useState } from "react";
+import { Scene } from "@/scene/Scene";
+import { VisibilityPanel } from "@/scene/VisibilityPanel";
+import { seedDemoProject } from "@/store/seed";
+
 function App() {
+  const [projectId] = useState(() => seedDemoProject());
+
   return (
-    <div className="flex min-h-svh items-center justify-center">
-      <h1 className="text-2xl font-semibold">Entity Modeler</h1>
+    <div className="relative h-svh w-svw">
+      <Scene projectId={projectId} />
+      <VisibilityPanel projectId={projectId} />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
