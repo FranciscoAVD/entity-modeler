@@ -1,0 +1,225 @@
+import { beforeEach, describe, expect, it } from "bun:test";
+import { entitiesInSpace, getWorldPosition, searchByTag, searchByTitle } from "./selectors";
+import { useModelStore } from "./store";
+
+beforeEach(() => {
+  useModelStore.setState({
+    projects: new Map(),
+    spaces: new Map(),
+    orbits: new Map(),
+    entities: new Map(),
+    relationships: new Map(),
+    openTabs: [],
+    activeTabId: null,
+  });
+});
+
+function seedProjectSpace() {
+  const { addProject, addSpace } = useModelStore.getState();
+  const projectId = addProject({ name: "Test Project" });
+  const spaceId = addSpace({ projectId, name: "Space A" });
+  return { projectId, spaceId };
+}
+
+describe("entity creation", () => {
+  it("requires an existing space", () => {
+    const { addEntity } = useModelStore.getState();
+    expect(() => addEntity({ spaceId: "missing", name: "Foo" })).toThrow();
+  });
+
+  it("rejects an orbit that belongs to a different space", () => {
+    const { addSpace, addOrbit, addEntity, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const orbitInB = addOrbit({ spaceId: spaceB, name: "Orbit B" });
+
+    expect(() => addEntity({ spaceId: spaceA, orbitId: orbitInB, name: "Foo" })).toThrow();
+  });
+});
+
+describe("relationships", () => {
+  it("rejects self-relationships", () => {
+    const { addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Solo" });
+
+    expect(() =>
+      addRelationship({ sourceId: entityId, targetId: entityId, cardinality: "1:1" }),
+    ).toThrow();
+  });
+
+  it("survives the entity being moved to another space", () => {
+    const { addSpace, addEntity, addRelationship, moveEntity, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const source = addEntity({ spaceId: spaceA, name: "Source" });
+    const target = addEntity({ spaceId: spaceA, name: "Target" });
+    const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:N" });
+
+    moveEntity(source, { spaceId: spaceB });
+
+    expect(useModelStore.getState().relationships.has(relId)).toBe(true);
+    expect(useModelStore.getState().entities.get(source)?.spaceId).toBe(spaceB);
+  });
+});
+
+describe("cascading deletes", () => {
+  it("deleting a space removes its orbits, entities, and touching relationships", () => {
+    const { addSpace, addOrbit, addEntity, addRelationship, deleteSpace, addProject } =
+      useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const orbitId = addOrbit({ spaceId: spaceA, name: "Orbit" });
+    const inA = addEntity({ spaceId: spaceA, orbitId, name: "InA" });
+    const inB = addEntity({ spaceId: spaceB, name: "InB" });
+    const relId = addRelationship({ sourceId: inA, targetId: inB, cardinality: "1:1" });
+
+    deleteSpace(spaceA);
+
+    const state = useModelStore.getState();
+    expect(state.spaces.has(spaceA)).toBe(false);
+    expect(state.orbits.has(orbitId)).toBe(false);
+    expect(state.entities.has(inA)).toBe(false);
+    expect(state.relationships.has(relId)).toBe(false);
+    // Entity in the untouched space survives — only the relationship that touched a deleted entity is gone.
+    expect(state.entities.has(inB)).toBe(true);
+  });
+
+  it("deleting an orbit clears orbitId on its entities instead of deleting them", () => {
+    const { addOrbit, addEntity, deleteOrbit } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "Orbit" });
+    const entityId = addEntity({ spaceId, orbitId, name: "Node" });
+
+    deleteOrbit(orbitId);
+
+    const state = useModelStore.getState();
+    expect(state.orbits.has(orbitId)).toBe(false);
+    expect(state.entities.has(entityId)).toBe(true);
+    expect(state.entities.get(entityId)?.orbitId).toBeUndefined();
+  });
+});
+
+describe("position resolution", () => {
+  it("composes entity position with orbit and space origins", () => {
+    const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S", origin: { x: 100, y: 0, z: 0 } });
+    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
+    const entityId = addEntity({ spaceId, orbitId, name: "E", position: { x: 1, y: 1, z: 1 } });
+
+    const world = getWorldPosition(useModelStore.getState(), entityId);
+    expect(world).toEqual({ x: 101, y: 11, z: 1 });
+  });
+
+  it("skips the orbit offset when the entity has none", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S", origin: { x: 5, y: 0, z: 0 } });
+    const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
+
+    expect(getWorldPosition(useModelStore.getState(), entityId)).toEqual({ x: 6, y: 0, z: 0 });
+  });
+});
+
+describe("tabs", () => {
+  it("opening a tab activates it without duplicating", () => {
+    const { openTab } = useModelStore.getState();
+    openTab("a", "entity");
+    openTab("b", "entity");
+    openTab("a", "entity");
+
+    const state = useModelStore.getState();
+    expect(state.openTabs.map((t) => t.id)).toEqual(["a", "b"]);
+    expect(state.activeTabId).toBe("a");
+  });
+
+  it("closing the active tab activates the next remaining tab", () => {
+    const { openTab, closeTab } = useModelStore.getState();
+    openTab("a", "entity");
+    openTab("b", "entity");
+    openTab("c", "entity");
+    useModelStore.setState({ activeTabId: "b" });
+
+    closeTab("b");
+
+    expect(useModelStore.getState().activeTabId).toBe("c");
+  });
+
+  it("closing the last active tab falls back to the previous one", () => {
+    const { openTab, closeTab } = useModelStore.getState();
+    openTab("a", "entity");
+    openTab("b", "entity");
+    useModelStore.setState({ activeTabId: "b" });
+
+    closeTab("b");
+
+    expect(useModelStore.getState().activeTabId).toBe("a");
+  });
+
+  it("closing the only tab leaves none active", () => {
+    const { openTab, closeTab } = useModelStore.getState();
+    openTab("a", "entity");
+    closeTab("a");
+
+    expect(useModelStore.getState().activeTabId).toBeNull();
+    expect(useModelStore.getState().openTabs).toEqual([]);
+  });
+
+  it("cascading deletes prune tabs for removed entities and relationships", () => {
+    const { addSpace, addEntity, addRelationship, deleteSpace, openTab, addProject } =
+      useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    openTab(a, "entity");
+    openTab(relId, "relationship");
+
+    deleteSpace(spaceId);
+
+    const state = useModelStore.getState();
+    expect(state.openTabs).toEqual([]);
+    expect(state.activeTabId).toBeNull();
+  });
+});
+
+describe("search", () => {
+  it("finds objects by substring title match", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "Network Topology" });
+    const spaceId = addSpace({ projectId, name: "DMZ" });
+    addEntity({ spaceId, name: "Firewall" });
+
+    const state = useModelStore.getState();
+    expect(searchByTitle(state, "wall").map((r) => r.name)).toEqual(["Firewall"]);
+    expect(searchByTitle(state, "dmz").map((r) => r.name)).toEqual(["DMZ"]);
+  });
+
+  it("finds spaces/orbits by tag", () => {
+    const { addProject, addSpace, addOrbit } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Prod", tags: ["prod", "external-facing"] });
+    addOrbit({ spaceId, name: "Edge", tags: ["prod"] });
+
+    const state = useModelStore.getState();
+    const ids = searchByTag(state, "prod");
+    expect(ids).toHaveLength(2);
+  });
+});
+
+describe("entitiesInSpace", () => {
+  it("includes entities regardless of orbit assignment", () => {
+    const { addOrbit, addEntity } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    addEntity({ spaceId, orbitId, name: "InOrbit" });
+    addEntity({ spaceId, name: "Ungrouped" });
+
+    expect(entitiesInSpace(useModelStore.getState(), spaceId)).toHaveLength(2);
+  });
+});
