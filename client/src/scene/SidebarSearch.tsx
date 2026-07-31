@@ -1,13 +1,8 @@
-import { Circle, Orbit } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-
-const RESULT_ICONS: Partial<Record<SearchResult["type"], typeof Circle>> = {
-  entity: Circle,
-  orbit: Orbit,
-};
+import { TYPE_ICONS } from "./typeIcons";
 
 // Only entity/orbit results are tab-able (spaces/projects aren't part of the tab-based reveal
 // flow — plan.md: "Spaces: not part of the reveal flow"), so they're shown but not selectable.
@@ -15,7 +10,7 @@ function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" {
   return type === "entity" || type === "orbit";
 }
 
-export function SearchBar() {
+export function SidebarSearch() {
   const [query, setQuery] = useState("");
 
   // searchAll builds fresh SearchResult objects on every call, so a reactive selector would
@@ -41,17 +36,16 @@ export function SearchBar() {
   };
 
   return (
-    <div className="absolute top-4 left-1/2 w-72 -translate-x-1/2">
+    <div>
       <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search entities, orbits, tags…"
-        className="bg-card/90 backdrop-blur"
       />
       {results.length > 0 && (
-        <div className="bg-card/95 border-border mt-1 max-h-64 overflow-y-auto rounded-lg border p-1 text-sm backdrop-blur">
+        <div className="border-border mt-1 max-h-48 overflow-y-auto rounded-lg border text-sm">
           {results.map((result) => {
-            const Icon = RESULT_ICONS[result.type];
+            const Icon = TYPE_ICONS[result.type];
             const selectable = isSelectable(result.type);
             return (
               <button
@@ -59,11 +53,11 @@ export function SearchBar() {
                 type="button"
                 disabled={!selectable}
                 onClick={() => handleSelect(result)}
-                className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left ${
+                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left ${
                   selectable ? "hover:bg-muted" : "text-muted-foreground cursor-default opacity-60"
                 }`}
               >
-                {Icon ? <Icon className="size-3.5 shrink-0" /> : <span className="size-3.5 shrink-0" />}
+                <Icon className="size-3.5 shrink-0" />
                 <span className="truncate">{result.name}</span>
                 <span className="text-muted-foreground ml-auto text-xs">{result.type}</span>
               </button>

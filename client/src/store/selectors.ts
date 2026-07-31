@@ -1,6 +1,10 @@
 import { add } from "@/lib/vector3";
 import type { ModelState } from "./store";
-import type { Entity, Orbit, Relationship, Space, Tab, Vector3 } from "./types";
+import type { Entity, Orbit, Project, Relationship, Space, Tab, Vector3 } from "./types";
+
+export function allProjects(state: ModelState): Project[] {
+  return [...state.projects.values()];
+}
 
 export function spacesInProject(state: ModelState, projectId: string): Space[] {
   return [...state.spaces.values()].filter((s) => s.projectId === projectId);
@@ -28,11 +32,13 @@ export function relationshipsForEntity(state: ModelState, entityId: string): Rel
   );
 }
 
-export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
+export function entitiesInProject(state: ModelState, projectId: string): Entity[] {
   const spaceIds = new Set(spacesInProject(state, projectId).map((s) => s.id));
-  const entityIds = new Set(
-    [...state.entities.values()].filter((e) => spaceIds.has(e.spaceId)).map((e) => e.id),
-  );
+  return [...state.entities.values()].filter((e) => spaceIds.has(e.spaceId));
+}
+
+export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
+  const entityIds = new Set(entitiesInProject(state, projectId).map((e) => e.id));
   return [...state.relationships.values()].filter(
     (r) => entityIds.has(r.sourceId) && entityIds.has(r.targetId),
   );

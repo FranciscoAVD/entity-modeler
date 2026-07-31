@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import {
+  allProjects,
+  entitiesInProject,
   entitiesInSpace,
   getOrbitWorldOrigin,
   getWorldPosition,
@@ -388,5 +390,40 @@ describe("relationshipsInProject", () => {
     addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipsInProject(useModelStore.getState(), projectB)).toEqual([]);
+  });
+});
+
+describe("allProjects", () => {
+  it("lists every project", () => {
+    const { addProject } = useModelStore.getState();
+    addProject({ name: "A" });
+    addProject({ name: "B" });
+
+    expect(allProjects(useModelStore.getState()).map((p) => p.name).sort()).toEqual(["A", "B"]);
+  });
+});
+
+describe("entitiesInProject", () => {
+  it("includes entities across all of the project's spaces", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    addEntity({ spaceId: spaceA, name: "A1" });
+    addEntity({ spaceId: spaceB, name: "B1" });
+
+    expect(entitiesInProject(useModelStore.getState(), projectId)).toHaveLength(2);
+  });
+
+  it("excludes entities from a different project", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    const spaceA = addSpace({ projectId: projectA, name: "SA" });
+    const spaceB = addSpace({ projectId: projectB, name: "SB" });
+    addEntity({ spaceId: spaceA, name: "A1" });
+    addEntity({ spaceId: spaceB, name: "B1" });
+
+    expect(entitiesInProject(useModelStore.getState(), projectA)).toHaveLength(1);
   });
 });

@@ -131,7 +131,7 @@ export function InfoPanel() {
   if (!activeTab) return null;
 
   return (
-    <div className="max-h-64 overflow-y-auto p-3">
+    <div className="flex-1 overflow-y-auto p-3">
       {activeTab.type === "entity" && <EntityDetails entityId={activeTab.id} />}
       {activeTab.type === "orbit" && <OrbitDetails orbitId={activeTab.id} />}
       {activeTab.type === "relationship" && <RelationshipDetails relationshipId={activeTab.id} />}
