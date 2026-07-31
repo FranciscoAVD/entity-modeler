@@ -30,12 +30,17 @@ export function SidebarTree({
 
   return (
     <div className="space-y-2 text-sm">
-      {spaces.map((space) => (
-        <SpaceRow
-          key={space.id}
-          space={space}
-          onRequestCreate={onRequestCreate}
-        />
+      {spaces.map((space, idx) => (
+        <>
+          <SpaceRow
+            key={space.id}
+            space={space}
+            onRequestCreate={onRequestCreate}
+          />
+          {idx !== spaces.length - 1 && (
+            <div className="my-4 mx-auto w-[calc(100%-1rem)] h-0.5 bg-border/50" />
+          )}
+        </>
       ))}
     </div>
   );
@@ -130,7 +135,7 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
           </DropdownMenuItem>
         </OptionsMenu>
       </div>
-      <div className="mt-1.5 ml-5 space-y-1.5">
+      <ul className="border-l border-dashed mt-1.5 ml-2 pl-4 space-y-1.5">
         {orbits.map((orbit) => (
           <OrbitRow
             key={orbit.id}
@@ -138,7 +143,7 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
             onRequestCreate={onRequestCreate}
           />
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
