@@ -1,30 +1,33 @@
 import { entitiesInOrbit, orbitsInSpace, ungroupedEntitiesInSpace } from "@/store/selectors";
 import type { ModelState } from "@/store/store";
-import type { Vector3 } from "@/store/types";
 
 // Never render a group too small to see or click, per plan.md's empty-state rule.
 export const MIN_BOUNDARY_RADIUS = 2;
-const BOUNDARY_PADDING = 1.5;
 
-function length(v: Vector3): number {
-  return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
-}
-
-function radiusForPoints(points: Vector3[]): number {
-  if (points.length === 0) return MIN_BOUNDARY_RADIUS;
-  const farthest = Math.max(...points.map(length));
-  return Math.max(MIN_BOUNDARY_RADIUS, farthest + BOUNDARY_PADDING);
-}
-
-// A space's boundary must contain its orbits (as nested spheres) and any ungrouped entities.
-export function computeSpaceRadius(state: ModelState, spaceId: string): number {
-  const orbitPoints = orbitsInSpace(state, spaceId).map((o) => o.origin);
-  const ungroupedPoints = ungroupedEntitiesInSpace(state, spaceId).map((e) => e.position);
-  return radiusForPoints([...orbitPoints, ...ungroupedPoints]);
-}
+// Orbit size is driven by how many entities it holds, not by their positions — so dragging
+// (or any future auto-layout) can move a node around without also resizing its container.
+// sqrt keeps growth from running away as the count climbs.
+const ORBIT_RADIUS_PER_ENTITY = 1.1;
 
 export function computeOrbitRadius(state: ModelState, orbitId: string): number {
-  return radiusForPoints(entitiesInOrbit(state, orbitId).map((e) => e.position));
+  const count = entitiesInOrbit(state, orbitId).length;
+  return MIN_BOUNDARY_RADIUS + ORBIT_RADIUS_PER_ENTITY * Math.sqrt(count);
+}
+
+// Space size is driven by how many orbits/ungrouped entities it holds. Orbits contribute
+// their own (already count-driven) radius rather than a flat weight, so a space with a
+// heavily-populated orbit still grows enough to visually contain it.
+const SPACE_RADIUS_SCALE = 2.2;
+const UNGROUPED_ENTITY_WEIGHT = 1.1;
+
+export function computeSpaceRadius(state: ModelState, spaceId: string): number {
+  const orbits = orbitsInSpace(state, spaceId);
+  const ungroupedCount = ungroupedEntitiesInSpace(state, spaceId).length;
+
+  const orbitWeight = orbits.reduce((sum, o) => sum + computeOrbitRadius(state, o.id), 0);
+  const weight = orbitWeight + ungroupedCount * UNGROUPED_ENTITY_WEIGHT;
+
+  return MIN_BOUNDARY_RADIUS + Math.sqrt(weight) * SPACE_RADIUS_SCALE;
 }
 
 // A space with an (even empty) orbit is still visually populated by that orbit's sphere.

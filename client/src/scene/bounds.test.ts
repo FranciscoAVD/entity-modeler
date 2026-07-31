@@ -30,14 +30,17 @@ describe("space radius and emptiness", () => {
     expect(isSpaceEmpty(useModelStore.getState(), spaceId)).toBe(true);
   });
 
-  it("grows to contain its farthest orbit or ungrouped entity", () => {
+  it("grows as more orbits/ungrouped entities are added, regardless of their position", () => {
     const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    addOrbit({ spaceId, name: "O", origin: { x: 10, y: 0, z: 0 } });
-    addEntity({ spaceId, name: "Ungrouped", position: { x: 1, y: 1, z: 1 } });
+    const before = computeSpaceRadius(useModelStore.getState(), spaceId);
 
-    expect(computeSpaceRadius(useModelStore.getState(), spaceId)).toBeGreaterThan(10);
+    // Far-flung origin/position must not matter — only presence does.
+    addOrbit({ spaceId, name: "O", origin: { x: 500, y: 0, z: 0 } });
+    addEntity({ spaceId, name: "Ungrouped", position: { x: -500, y: 0, z: 0 } });
+
+    expect(computeSpaceRadius(useModelStore.getState(), spaceId)).toBeGreaterThan(before);
     expect(isSpaceEmpty(useModelStore.getState(), spaceId)).toBe(false);
   });
 
@@ -54,10 +57,29 @@ describe("space radius and emptiness", () => {
     const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 1, y: 0, z: 0 } });
-    addEntity({ spaceId, orbitId, name: "Far but in-orbit", position: { x: 100, y: 0, z: 0 } });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    const withOrbitOnly = computeSpaceRadius(useModelStore.getState(), spaceId);
 
-    expect(computeSpaceRadius(useModelStore.getState(), spaceId)).toBeLessThan(100);
+    addEntity({ spaceId, orbitId, name: "In orbit" });
+
+    // Adding an entity INSIDE the orbit doesn't add another ungrouped-entity weight to the space.
+    expect(computeSpaceRadius(useModelStore.getState(), spaceId)).toBeGreaterThan(withOrbitOnly);
+    addEntity({ spaceId, name: "Ungrouped" });
+    const withOrbitAndUngrouped = computeSpaceRadius(useModelStore.getState(), spaceId);
+    expect(withOrbitAndUngrouped).toBeGreaterThan(withOrbitOnly);
+  });
+
+  it("grows enough to fit a heavily-populated orbit", () => {
+    const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+
+    for (let i = 0; i < 20; i++) addEntity({ spaceId, orbitId, name: `E${i}` });
+
+    const spaceRadius = computeSpaceRadius(useModelStore.getState(), spaceId);
+    const orbitRadius = computeOrbitRadius(useModelStore.getState(), orbitId);
+    expect(spaceRadius).toBeGreaterThan(orbitRadius);
   });
 });
 
@@ -72,14 +94,30 @@ describe("orbit radius and emptiness", () => {
     expect(isOrbitEmpty(useModelStore.getState(), orbitId)).toBe(true);
   });
 
-  it("grows to contain its farthest entity", () => {
+  it("grows as more entities are added, regardless of their position", () => {
     const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const orbitId = addOrbit({ spaceId, name: "O" });
-    addEntity({ spaceId, orbitId, name: "E", position: { x: 5, y: 0, z: 0 } });
+    const before = computeOrbitRadius(useModelStore.getState(), orbitId);
 
-    expect(computeOrbitRadius(useModelStore.getState(), orbitId)).toBeGreaterThan(5);
+    addEntity({ spaceId, orbitId, name: "E", position: { x: 500, y: 0, z: 0 } });
+
+    expect(computeOrbitRadius(useModelStore.getState(), orbitId)).toBeGreaterThan(before);
     expect(isOrbitEmpty(useModelStore.getState(), orbitId)).toBe(false);
+  });
+
+  it("is unaffected by moving an entity within the orbit", () => {
+    const { addProject, addSpace, addOrbit, addEntity, updateEntityPosition } =
+      useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    const entityId = addEntity({ spaceId, orbitId, name: "E" });
+    const before = computeOrbitRadius(useModelStore.getState(), orbitId);
+
+    updateEntityPosition(entityId, { x: 1000, y: 1000, z: 1000 });
+
+    expect(computeOrbitRadius(useModelStore.getState(), orbitId)).toBe(before);
   });
 });
