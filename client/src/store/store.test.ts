@@ -5,8 +5,10 @@ import {
   getWorldPosition,
   relationshipScope,
   relationshipsInProject,
+  searchAll,
   searchByTag,
   searchByTitle,
+  tabLabel,
 } from "./selectors";
 import { useModelStore } from "./store";
 
@@ -245,6 +247,60 @@ describe("search", () => {
     const state = useModelStore.getState();
     const ids = searchByTag(state, "prod");
     expect(ids).toHaveLength(2);
+  });
+
+  it("matches tags case-insensitively", () => {
+    const { addProject, addSpace } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    addSpace({ projectId, name: "Prod", tags: ["Prod"] });
+
+    expect(searchByTag(useModelStore.getState(), "PROD")).toHaveLength(1);
+  });
+
+  it("searchAll merges title and tag matches without duplicates", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Prod Cluster", tags: ["prod"] });
+    addEntity({ spaceId, name: "Server" });
+
+    const state = useModelStore.getState();
+    const byName = searchAll(state, "prod").map((r) => r.name);
+    expect(byName).toEqual(["Prod Cluster"]);
+
+    const combined = searchAll(state, "prod");
+    expect(new Set(combined.map((r) => r.id)).size).toBe(combined.length);
+  });
+});
+
+describe("tabLabel", () => {
+  it("labels an entity tab by its name", () => {
+    const { addEntity, openTab } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Server" });
+    openTab(entityId, "entity");
+
+    const state = useModelStore.getState();
+    expect(tabLabel(state, state.openTabs[0])).toBe("Server");
+  });
+
+  it("labels an orbit tab by its label, falling back to name", () => {
+    const { addOrbit } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "orbit-1", label: "DMZ" });
+
+    const state = useModelStore.getState();
+    expect(tabLabel(state, { id: orbitId, type: "orbit" })).toBe("DMZ");
+  });
+
+  it("labels a relationship tab by its source and target entity names", () => {
+    const { addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
+
+    const state = useModelStore.getState();
+    expect(tabLabel(state, { id: relId, type: "relationship" })).toBe("A → B");
   });
 });
 
