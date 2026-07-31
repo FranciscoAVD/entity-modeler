@@ -1,9 +1,6 @@
+import { add } from "@/lib/vector3";
 import type { ModelState } from "./store";
 import type { Entity, Orbit, Relationship, Space, Vector3 } from "./types";
-
-function addVec3(a: Vector3, b: Vector3): Vector3 {
-  return { x: a.x + b.x, y: a.y + b.y, z: a.z + b.z };
-}
 
 export function spacesInProject(state: ModelState, projectId: string): Space[] {
   return [...state.spaces.values()].filter((s) => s.projectId === projectId);
@@ -31,6 +28,33 @@ export function relationshipsForEntity(state: ModelState, entityId: string): Rel
   );
 }
 
+export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
+  const spaceIds = new Set(spacesInProject(state, projectId).map((s) => s.id));
+  const entityIds = new Set(
+    [...state.entities.values()].filter((e) => spaceIds.has(e.spaceId)).map((e) => e.id),
+  );
+  return [...state.relationships.values()].filter(
+    (r) => entityIds.has(r.sourceId) && entityIds.has(r.targetId),
+  );
+}
+
+export type RelationshipScope = "local" | "cross-orbit" | "cross-space";
+
+// "local" covers both same-orbit edges and edges between two ungrouped entities in the same
+// space — neither crosses an orbit boundary, so both get the same (most contained) styling tier.
+export function relationshipScope(state: ModelState, relationshipId: string): RelationshipScope {
+  const relationship = state.relationships.get(relationshipId);
+  if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+
+  const source = state.entities.get(relationship.sourceId);
+  const target = state.entities.get(relationship.targetId);
+  if (!source || !target) throw new Error(`Relationship ${relationshipId} has a dangling endpoint`);
+
+  if (source.spaceId !== target.spaceId) return "cross-space";
+  if (source.orbitId !== target.orbitId) return "cross-orbit";
+  return "local";
+}
+
 // Walks entity.position -> orbit.origin (if assigned) -> space.origin, per plan.md's position-resolution rule.
 export function getWorldPosition(state: ModelState, entityId: string): Vector3 {
   const entity = state.entities.get(entityId);
@@ -42,8 +66,8 @@ export function getWorldPosition(state: ModelState, entityId: string): Vector3 {
   const orbitOrigin = entity.orbitId ? state.orbits.get(entity.orbitId)?.origin : undefined;
 
   let position = entity.position;
-  if (orbitOrigin) position = addVec3(position, orbitOrigin);
-  return addVec3(position, space.origin);
+  if (orbitOrigin) position = add(position, orbitOrigin);
+  return add(position, space.origin);
 }
 
 export function getOrbitWorldOrigin(state: ModelState, orbitId: string): Vector3 {
@@ -53,7 +77,7 @@ export function getOrbitWorldOrigin(state: ModelState, orbitId: string): Vector3
   const space = state.spaces.get(orbit.spaceId);
   if (!space) throw new Error(`Space not found for orbit ${orbitId}: ${orbit.spaceId}`);
 
-  return addVec3(orbit.origin, space.origin);
+  return add(orbit.origin, space.origin);
 }
 
 export interface SearchResult {

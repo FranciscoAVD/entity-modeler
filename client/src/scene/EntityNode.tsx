@@ -6,7 +6,8 @@ import { RadialLabel } from "./RadialLabel";
 
 // Not GPU-instanced yet — fine at the node counts this tool targets (schemas/topologies,
 // not point clouds). Revisit with THREE.InstancedMesh under Phase 10 if profiling calls for it.
-const ENTITY_RADIUS = 0.6;
+// Exported so edge rendering can trim curves back to the sphere's surface instead of its center.
+export const ENTITY_RADIUS = 0.6;
 
 export function EntityNode({ entity }: { entity: Entity }) {
   const isActive = useModelStore((state) => state.activeTabId === entity.id);

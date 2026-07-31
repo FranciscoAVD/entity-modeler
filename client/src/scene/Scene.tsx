@@ -1,13 +1,17 @@
 import { Canvas } from "@react-three/fiber";
 import { useShallow } from "zustand/react/shallow";
-import { spacesInProject } from "@/store/selectors";
+import { relationshipsInProject, spacesInProject } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { CameraRig } from "./CameraRig";
 import { DEFAULT_CAMERA_POSITION } from "./cameraFocus";
+import { RelationshipEdge } from "./RelationshipEdge";
 import { SpaceBoundary } from "./SpaceBoundary";
 
 export function Scene({ projectId }: { projectId: string }) {
   const spaces = useModelStore(useShallow((state) => spacesInProject(state, projectId)));
+  const relationships = useModelStore(
+    useShallow((state) => relationshipsInProject(state, projectId)),
+  );
 
   return (
     <Canvas
@@ -22,6 +26,9 @@ export function Scene({ projectId }: { projectId: string }) {
       <CameraRig />
       {spaces.map((space) => (
         <SpaceBoundary key={space.id} space={space} />
+      ))}
+      {relationships.map((relationship) => (
+        <RelationshipEdge key={relationship.id} relationship={relationship} />
       ))}
     </Canvas>
   );

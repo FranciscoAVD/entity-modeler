@@ -52,6 +52,21 @@ describe("resolveCameraFocus", () => {
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
   });
 
+  it("focuses the midpoint of an active relationship tab", () => {
+    const { addProject, addSpace, addEntity, addRelationship, openTab } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const a = addEntity({ spaceId, name: "A", position: { x: 0, y: 0, z: 0 } });
+    const b = addEntity({ spaceId, name: "B", position: { x: 10, y: 0, z: 0 } });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
+    openTab(relId, "relationship");
+
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    expect(focus.key).toBe(`relationship:${relId}`);
+    expect(focus.target).toEqual({ x: 5, y: 0, z: 0 });
+    expect(focus.distance).toBeGreaterThan(0);
+  });
+
   // Regression: reset used to be silently overridden by whichever tab was still active.
   it("resetRequested overrides an active tab", () => {
     const { addProject, addSpace, addEntity, openTab } = useModelStore.getState();

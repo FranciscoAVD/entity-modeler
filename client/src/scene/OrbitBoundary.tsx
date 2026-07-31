@@ -20,12 +20,14 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
 
   if (hidden) return null;
 
-  // A click aimed at an entity inside this orbit also intersects the orbit's own hit
-  // volume (it's nearer along the ray). Defer to the entity when one is present in the
-  // hit list — matches the plan's "raycast against sphere meshes, keyed via userData.entityId".
+  // A click aimed at an entity (or an edge between two of its entities) also intersects
+  // this orbit's own hit volume first (it's nearer along the ray). Defer to whichever is
+  // present — matches the plan's "raycast against sphere meshes, keyed via userData.entityId".
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    const hitEntity = e.intersections.some((i) => i.object.userData?.entityId);
-    if (hitEntity) return;
+    const hitMoreSpecific = e.intersections.some(
+      (i) => i.object.userData?.entityId || i.object.userData?.relationshipId,
+    );
+    if (hitMoreSpecific) return;
     e.stopPropagation();
     openTab(orbit.id, "orbit");
   };

@@ -3,6 +3,8 @@ import {
   entitiesInSpace,
   getOrbitWorldOrigin,
   getWorldPosition,
+  relationshipScope,
+  relationshipsInProject,
   searchByTag,
   searchByTitle,
 } from "./selectors";
@@ -255,5 +257,80 @@ describe("entitiesInSpace", () => {
     addEntity({ spaceId, name: "Ungrouped" });
 
     expect(entitiesInSpace(useModelStore.getState(), spaceId)).toHaveLength(2);
+  });
+});
+
+describe("relationshipScope", () => {
+  it("is local for two entities in the same orbit", () => {
+    const { addOrbit, addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    const a = addEntity({ spaceId, orbitId, name: "A" });
+    const b = addEntity({ spaceId, orbitId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
+  });
+
+  it("is local for two ungrouped entities in the same space", () => {
+    const { addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
+  });
+
+  it("is cross-orbit for entities in different orbits of the same space", () => {
+    const { addOrbit, addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitA = addOrbit({ spaceId, name: "OA" });
+    const a = addEntity({ spaceId, orbitId: orbitA, name: "A" });
+    const b = addEntity({ spaceId, name: "Ungrouped" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-orbit");
+  });
+
+  it("is cross-space for entities in different spaces", () => {
+    const { addSpace, addEntity, addRelationship, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const a = addEntity({ spaceId: spaceA, name: "A" });
+    const b = addEntity({ spaceId: spaceB, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-space");
+  });
+});
+
+describe("relationshipsInProject", () => {
+  it("includes relationships whose endpoints span multiple spaces in the project", () => {
+    const { addSpace, addEntity, addRelationship, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const a = addEntity({ spaceId: spaceA, name: "A" });
+    const b = addEntity({ spaceId: spaceB, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    const ids = relationshipsInProject(useModelStore.getState(), projectId).map((r) => r.id);
+    expect(ids).toEqual([relId]);
+  });
+
+  it("excludes relationships belonging to a different project", () => {
+    const { addProject, addSpace, addEntity, addRelationship } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    const spaceA = addSpace({ projectId: projectA, name: "SA" });
+    const spaceB = addSpace({ projectId: projectB, name: "SB" });
+    const a = addEntity({ spaceId: spaceA, name: "A" });
+    const b = addEntity({ spaceId: spaceA, name: "B" });
+    addEntity({ spaceId: spaceB, name: "Other" });
+    addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(relationshipsInProject(useModelStore.getState(), projectB)).toEqual([]);
   });
 });
