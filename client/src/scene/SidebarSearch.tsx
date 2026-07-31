@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList } from "@/components/ui/combobox";
 import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { TYPE_ICONS } from "./typeIcons";
@@ -8,6 +8,10 @@ import { TYPE_ICONS } from "./typeIcons";
 // flow — plan.md: "Spaces: not part of the reveal flow"), so they're shown but not selectable.
 function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" {
   return type === "entity" || type === "orbit";
+}
+
+function resultKey(result: SearchResult) {
+  return `${result.type}:${result.id}`;
 }
 
 export function SidebarSearch() {
@@ -29,42 +33,50 @@ export function SidebarSearch() {
     return searchAll({ projects, spaces, orbits, entities }, query);
   }, [query, projects, spaces, orbits, entities]);
 
-  const handleSelect = (result: SearchResult) => {
-    if (!isSelectable(result.type)) return;
+  const handleValueChange = (result: SearchResult | null) => {
+    if (!result || !isSelectable(result.type)) return;
     openTab(result.id, result.type);
     setQuery("");
   };
 
   return (
-    <div>
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search entities, orbits, tags…"
-      />
-      {results.length > 0 && (
-        <div className="border-border mt-1 max-h-48 overflow-y-auto rounded-lg border text-sm">
-          {results.map((result) => {
+    // searchAll already does fuzzy title + exact tag matching across types, so the combobox's
+    // own filtering is disabled (`filter={null}`) and fed pre-filtered `items` instead.
+    // `value` is always reset to null after a pick — this is a jump-to-result search, not a
+    // persistent selection, so nothing should stay "selected" in the input.
+    <Combobox<SearchResult>
+      items={results}
+      value={null}
+      onValueChange={handleValueChange}
+      inputValue={query}
+      onInputValueChange={setQuery}
+      itemToStringLabel={(result) => result.name}
+      isItemEqualToValue={(a, b) => resultKey(a) === resultKey(b)}
+      filter={null}
+      openOnInputClick={false}
+    >
+      <ComboboxInput placeholder="Search entities, orbits, tags…" showTrigger={false} />
+      <ComboboxContent>
+        <ComboboxEmpty>No results.</ComboboxEmpty>
+        <ComboboxList>
+          {(result: SearchResult) => {
             const Icon = TYPE_ICONS[result.type];
             const selectable = isSelectable(result.type);
             return (
-              <button
-                key={`${result.type}:${result.id}`}
-                type="button"
+              <ComboboxItem
+                key={resultKey(result)}
+                value={result}
                 disabled={!selectable}
-                onClick={() => handleSelect(result)}
-                className={`flex w-full items-center gap-2 px-2 py-1.5 text-left ${
-                  selectable ? "hover:bg-muted" : "text-muted-foreground cursor-default opacity-60"
-                }`}
+                className={!selectable ? "text-muted-foreground opacity-60" : undefined}
               >
                 <Icon className="size-3.5 shrink-0" />
                 <span className="truncate">{result.name}</span>
                 <span className="text-muted-foreground ml-auto text-xs">{result.type}</span>
-              </button>
+              </ComboboxItem>
             );
-          })}
-        </div>
-      )}
-    </div>
+          }}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
