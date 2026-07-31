@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from "bun:test";
-import { entitiesInSpace, getWorldPosition, searchByTag, searchByTitle } from "./selectors";
+import {
+  entitiesInSpace,
+  getOrbitWorldOrigin,
+  getWorldPosition,
+  searchByTag,
+  searchByTitle,
+} from "./selectors";
 import { useModelStore } from "./store";
 
 beforeEach(() => {
@@ -65,6 +71,25 @@ describe("relationships", () => {
   });
 });
 
+describe("updateEntityPosition", () => {
+  it("updates only the position field", () => {
+    const { addEntity, updateEntityPosition } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node", position: { x: 0, y: 0, z: 0 } });
+
+    updateEntityPosition(entityId, { x: 3, y: 4, z: 5 });
+
+    const entity = useModelStore.getState().entities.get(entityId);
+    expect(entity?.position).toEqual({ x: 3, y: 4, z: 5 });
+    expect(entity?.spaceId).toBe(spaceId);
+  });
+
+  it("throws for an unknown entity", () => {
+    const { updateEntityPosition } = useModelStore.getState();
+    expect(() => updateEntityPosition("missing", { x: 0, y: 0, z: 0 })).toThrow();
+  });
+});
+
 describe("cascading deletes", () => {
   it("deleting a space removes its orbits, entities, and touching relationships", () => {
     const { addSpace, addOrbit, addEntity, addRelationship, deleteSpace, addProject } =
@@ -122,6 +147,15 @@ describe("position resolution", () => {
     const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
 
     expect(getWorldPosition(useModelStore.getState(), entityId)).toEqual({ x: 6, y: 0, z: 0 });
+  });
+
+  it("resolves an orbit's world origin from its space", () => {
+    const { addProject, addSpace, addOrbit } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S", origin: { x: 10, y: 0, z: 0 } });
+    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 5, z: 0 } });
+
+    expect(getOrbitWorldOrigin(useModelStore.getState(), orbitId)).toEqual({ x: 10, y: 5, z: 0 });
   });
 });
 

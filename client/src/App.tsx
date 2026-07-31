@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ResetViewButton } from "@/scene/ResetViewButton";
 import { Scene } from "@/scene/Scene";
 import { VisibilityPanel } from "@/scene/VisibilityPanel";
 import { seedDemoProject } from "@/store/seed";
@@ -10,6 +11,7 @@ function App() {
     <div className="relative h-svh w-svw">
       <Scene projectId={projectId} />
       <VisibilityPanel projectId={projectId} />
+      <ResetViewButton />
     </div>
   );
 }

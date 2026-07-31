@@ -5,11 +5,12 @@ interface BoundarySphereProps {
   radius: number;
   color: string;
   empty: boolean;
+  active?: boolean;
 }
 
 // Populated groups get a tinted, solid-edged fill; empty groups drop the fill and
 // switch to a dashed edge, per plan.md's empty-state treatment.
-export function BoundarySphere({ radius, color, empty }: BoundarySphereProps) {
+export function BoundarySphere({ radius, color, empty, active }: BoundarySphereProps) {
   const sphereGeometry = useMemo(() => new THREE.SphereGeometry(radius, 24, 16), [radius]);
   const wireframeGeometry = useMemo(
     () => new THREE.WireframeGeometry(sphereGeometry),
@@ -25,14 +26,20 @@ export function BoundarySphere({ radius, color, empty }: BoundarySphereProps) {
     <group>
       {!empty && (
         <mesh geometry={sphereGeometry}>
-          <meshBasicMaterial color={color} transparent opacity={0.1} depthWrite={false} />
+          <meshBasicMaterial color={color} transparent opacity={active ? 0.2 : 0.1} depthWrite={false} />
         </mesh>
       )}
       <lineSegments ref={lineRef} geometry={wireframeGeometry}>
         {empty ? (
-          <lineDashedMaterial color={color} transparent opacity={0.5} dashSize={0.3} gapSize={0.25} />
+          <lineDashedMaterial
+            color={color}
+            transparent
+            opacity={active ? 0.85 : 0.5}
+            dashSize={0.3}
+            gapSize={0.25}
+          />
         ) : (
-          <lineBasicMaterial color={color} transparent opacity={0.35} />
+          <lineBasicMaterial color={color} transparent opacity={active ? 0.7 : 0.35} />
         )}
       </lineSegments>
     </group>

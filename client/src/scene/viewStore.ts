@@ -7,6 +7,9 @@ interface ViewState {
   hiddenOrbitIds: Set<string>;
   toggleSpaceVisibility(id: string): void;
   toggleOrbitVisibility(id: string): void;
+  // Incremented to request a camera fly-to-overview independent of tab state (plan.md's "reset view" control).
+  resetViewToken: number;
+  requestResetView(): void;
 }
 
 function toggle(set: Set<string>, id: string): Set<string> {
@@ -26,5 +29,11 @@ export const useViewStore = create<ViewState>()((set, get) => ({
 
   toggleOrbitVisibility(id) {
     set({ hiddenOrbitIds: toggle(get().hiddenOrbitIds, id) });
+  },
+
+  resetViewToken: 0,
+
+  requestResetView() {
+    set({ resetViewToken: get().resetViewToken + 1 });
   },
 }));

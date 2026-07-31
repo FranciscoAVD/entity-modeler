@@ -46,6 +46,16 @@ export function getWorldPosition(state: ModelState, entityId: string): Vector3 {
   return addVec3(position, space.origin);
 }
 
+export function getOrbitWorldOrigin(state: ModelState, orbitId: string): Vector3 {
+  const orbit = state.orbits.get(orbitId);
+  if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
+
+  const space = state.spaces.get(orbit.spaceId);
+  if (!space) throw new Error(`Space not found for orbit ${orbitId}: ${orbit.spaceId}`);
+
+  return addVec3(orbit.origin, space.origin);
+}
+
 export interface SearchResult {
   id: string;
   type: "project" | "space" | "orbit" | "entity";

@@ -56,6 +56,7 @@ export interface ModelActions {
   addRelationship(input: { sourceId: string; targetId: string; cardinality: Cardinality }): string;
 
   moveEntity(entityId: string, target: { spaceId: string; orbitId?: string }): void;
+  updateEntityPosition(entityId: string, position: Vector3): void;
 
   deleteProject(projectId: string): void;
   deleteSpace(spaceId: string): void;
@@ -206,6 +207,16 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     // Field update only — relationships reference entities by id and are never touched by a move.
     const entities = new Map(state.entities);
     entities.set(entityId, { ...entity, spaceId, orbitId });
+    set({ entities });
+  },
+
+  updateEntityPosition(entityId, position) {
+    const state = get();
+    const entity = state.entities.get(entityId);
+    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+
+    const entities = new Map(state.entities);
+    entities.set(entityId, { ...entity, position });
     set({ entities });
   },
 
