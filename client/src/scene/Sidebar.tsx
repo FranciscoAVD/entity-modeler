@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -20,7 +21,10 @@ export type PendingCreate =
   | { type: "orbit"; spaceId: string }
   | { type: "node"; spaceId: string; orbitId?: string };
 
-const DIALOG_CONFIG: Record<PendingCreate["type"], { title: string; placeholder: string }> = {
+const DIALOG_CONFIG: Record<
+  PendingCreate["type"],
+  { title: string; placeholder: string }
+> = {
   project: { title: "New project", placeholder: "Project name" },
   space: { title: "New space", placeholder: "Space name" },
   orbit: { title: "New orbit", placeholder: "Orbit name" },
@@ -38,16 +42,14 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-1.5 flex items-center justify-between">
-      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">{label}</h2>
+      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+        {label}
+      </h2>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={menuLabel}
-            className="hover:bg-muted text-muted-foreground hover:text-foreground rounded p-0.5"
-          >
-            <Plus className="size-3.5" />
-          </button>
+          <Button size="icon-xs">
+            <Plus />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onSelect={onAction}>{menuLabel}</DropdownMenuItem>
@@ -92,9 +94,13 @@ export function Sidebar({
   };
 
   return (
-    <div className="bg-card/95 border-border absolute inset-y-0 left-0 flex w-72 flex-col gap-4 overflow-y-auto border-r p-3 backdrop-blur">
+    <div className="bg-card/80 absolute inset-y-0 left-0 flex w-72 flex-col gap-4 overflow-y-auto border-r p-3 backdrop-blur">
       <div>
-        <SectionHeader label="Project" menuLabel="New project" onAction={() => setPending({ type: "project" })} />
+        <SectionHeader
+          label="Project"
+          menuLabel="New project"
+          onAction={() => setPending({ type: "project" })}
+        />
         <select
           value={projectId}
           onChange={(e) => onProjectChange(e.target.value)}
@@ -109,7 +115,9 @@ export function Sidebar({
       </div>
 
       <div>
-        <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">Search</h2>
+        <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+          Search
+        </h2>
         <SidebarSearch />
       </div>
 
@@ -122,7 +130,11 @@ export function Sidebar({
       </div>
 
       <div>
-        <SectionHeader label="Spaces" menuLabel="Add space" onAction={() => setPending({ type: "space" })} />
+        <SectionHeader
+          label="Spaces"
+          menuLabel="Add space"
+          onAction={() => setPending({ type: "space" })}
+        />
         <SidebarTree projectId={projectId} onRequestCreate={setPending} />
       </div>
 
@@ -132,7 +144,9 @@ export function Sidebar({
           if (!open) setPending(null);
         }}
         title={pending ? DIALOG_CONFIG[pending.type].title : ""}
-        placeholder={pending ? DIALOG_CONFIG[pending.type].placeholder : undefined}
+        placeholder={
+          pending ? DIALOG_CONFIG[pending.type].placeholder : undefined
+        }
         onSubmit={handleCreate}
       />
       <AddRelationshipDialog
