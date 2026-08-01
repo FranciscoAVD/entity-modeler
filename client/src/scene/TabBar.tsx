@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { Button } from "@/components/ui/button";
 import { tabLabel } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Tab } from "@/store/types";
@@ -19,18 +20,25 @@ function TabChip({ tab, active }: { tab: Tab; active: boolean }) {
           : "hover:bg-muted text-muted-foreground hover:text-foreground border-transparent"
       }`}
     >
-      <button type="button" className="flex min-w-0 items-center gap-1.5" onClick={() => setActiveTab(tab.id)}>
+      <Button
+        type="button"
+        variant="ghost"
+        className="h-auto min-w-0 gap-1.5 p-0 hover:bg-transparent"
+        onClick={() => setActiveTab(tab.id)}
+      >
         <Icon className="size-3.5 shrink-0" />
         <span className="max-w-32 truncate">{label}</span>
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
+        variant="ghost"
+        size="icon-xs"
         aria-label={`Close ${label}`}
-        className="hover:bg-muted shrink-0 rounded-full p-0.5"
+        className="size-auto shrink-0 rounded-full p-0.5"
         onClick={() => closeTab(tab.id)}
       >
         <X className="size-3" />
-      </button>
+      </Button>
     </div>
   );
 }

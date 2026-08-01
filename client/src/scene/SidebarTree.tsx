@@ -1,5 +1,6 @@
 import { MoreVertical } from "lucide-react";
 import { useShallow } from "zustand/react/shallow";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -59,13 +60,14 @@ function OptionsMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
+        <Button
+          variant="ghost"
+          size="icon-xs"
           aria-label={`${label} options`}
-          className="hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 rounded p-0.5"
+          className="text-muted-foreground size-auto shrink-0 rounded p-0.5"
         >
           <MoreVertical className="size-3.5" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuCheckboxItem
