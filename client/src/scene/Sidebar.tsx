@@ -8,6 +8,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { allProjects } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { AddRelationshipDialog } from "./AddRelationshipDialog";
@@ -101,17 +108,18 @@ export function Sidebar({
           menuLabel="New project"
           onAction={() => setPending({ type: "project" })}
         />
-        <select
-          value={projectId}
-          onChange={(e) => onProjectChange(e.target.value)}
-          className="border-border bg-background w-full rounded border px-1.5 py-1 text-sm font-medium"
-        >
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.name}
-            </option>
-          ))}
-        </select>
+        <Select value={projectId} onValueChange={onProjectChange}>
+          <SelectTrigger className="w-full font-medium">
+            <SelectValue placeholder="Select project" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>

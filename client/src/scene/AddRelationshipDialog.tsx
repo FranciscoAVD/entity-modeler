@@ -2,11 +2,16 @@ import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { entitiesInProject } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Cardinality } from "@/store/types";
-
-const SELECT_CLASS = "border-border bg-background w-full rounded border px-1.5 py-1 text-sm";
 
 // Unlike space/orbit/node quick-add, a relationship has no meaningful "just a name" default —
 // it needs two real entities to connect, so this gets its own dialog instead of CreateDialog.
@@ -48,35 +53,43 @@ export function AddRelationshipDialog({
           <DialogTitle>Add relationship</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
-          <select value={sourceId} onChange={(e) => setSourceId(e.target.value)} className={SELECT_CLASS}>
-            <option value="" disabled>
-              Source entity
-            </option>
-            {entities.map((entity) => (
-              <option key={entity.id} value={entity.id}>
-                {entity.name}
-              </option>
-            ))}
-          </select>
-          <select value={targetId} onChange={(e) => setTargetId(e.target.value)} className={SELECT_CLASS}>
-            <option value="" disabled>
-              Target entity
-            </option>
-            {entities.map((entity) => (
-              <option key={entity.id} value={entity.id}>
-                {entity.name}
-              </option>
-            ))}
-          </select>
-          <select
+          <Select value={sourceId} onValueChange={setSourceId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Source entity" />
+            </SelectTrigger>
+            <SelectContent>
+              {entities.map((entity) => (
+                <SelectItem key={entity.id} value={entity.id}>
+                  {entity.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={targetId} onValueChange={setTargetId}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Target entity" />
+            </SelectTrigger>
+            <SelectContent>
+              {entities.map((entity) => (
+                <SelectItem key={entity.id} value={entity.id}>
+                  {entity.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
             value={cardinality}
-            onChange={(e) => setCardinality(e.target.value as Cardinality)}
-            className={SELECT_CLASS}
+            onValueChange={(value) => setCardinality(value as Cardinality)}
           >
-            <option value="1:1">1:1</option>
-            <option value="1:N">1:N</option>
-            <option value="N:M">N:M</option>
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1:1">1:1</SelectItem>
+              <SelectItem value="1:N">1:N</SelectItem>
+              <SelectItem value="N:M">N:M</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => close(false)}>
