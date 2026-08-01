@@ -6,7 +6,7 @@ import type { Orbit } from "@/store/types";
 import { BoundaryLabel } from "./BoundaryLabel";
 import { BoundarySphere } from "./BoundarySphere";
 import { computeOrbitRadius, isOrbitEmpty } from "./bounds";
-import { ORBIT_COLOR } from "./colors";
+import { ORBIT_COLOR } from "./SidebarTypeIcons";
 import { EntityNode } from "./EntityNode";
 import { useViewStore } from "./viewStore";
 

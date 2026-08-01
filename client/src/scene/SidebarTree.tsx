@@ -12,9 +12,8 @@ import { orbitsInSpace, spacesInProject } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Orbit, Space } from "@/store/types";
 import type { PendingCreate } from "./Sidebar";
-import { TYPE_ICONS } from "./typeIcons";
+import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
-import { SPACE_COLOR, ORBIT_COLOR, ENTITY_COLOR } from "./colors";
 
 interface TreeProps {
   onRequestCreate: (request: PendingCreate) => void;
@@ -90,19 +89,13 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
   const toggleSpaceVisibility = useViewStore(
     (state) => state.toggleSpaceVisibility,
   );
-  const SpaceIcon = TYPE_ICONS.space;
-  const OrbitIcon = TYPE_ICONS.orbit;
-  const EntityIcon = TYPE_ICONS.entity;
 
   return (
     <div>
       <div
         className={`flex items-center gap-2 font-medium ${hidden ? "text-muted-foreground" : ""}`}
       >
-        <SpaceIcon
-          color={SPACE_COLOR}
-          className="size-6 shrink-0 bg-space/10 p-1 rounded-full"
-        />
+        <SpaceIcon className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">
           {space.label ?? space.name}
         </span>
@@ -116,10 +109,7 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
               onRequestCreate({ type: "orbit", spaceId: space.id })
             }
           >
-            <OrbitIcon
-              color={ORBIT_COLOR}
-              className="mr-1.5 size-6 bg-orbit/10 p-1 rounded-full"
-            />
+            <OrbitIcon className="mr-1.5" />
             Add orbit
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -127,10 +117,7 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
               onRequestCreate({ type: "node", spaceId: space.id })
             }
           >
-            <EntityIcon
-              color={ENTITY_COLOR}
-              className="mr-1.5 size-6 p-1 bg-entity/10 rounded-full"
-            />
+            <EntityIcon className="mr-1.5" />
             Add node
           </DropdownMenuItem>
         </OptionsMenu>
@@ -153,15 +140,10 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
   const toggleOrbitVisibility = useViewStore(
     (state) => state.toggleOrbitVisibility,
   );
-  const OrbitIcon = TYPE_ICONS.orbit;
-  const EntityIcon = TYPE_ICONS.entity;
 
   return (
     <div className="text-muted-foreground flex items-center gap-2">
-      <OrbitIcon
-        color={ORBIT_COLOR}
-        className="size-6 p-1 bg-orbit/10 shrink-0 rounded-full"
-      />
+      <OrbitIcon className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         {orbit.label ?? orbit.name}
       </span>
@@ -179,10 +161,7 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
             })
           }
         >
-          <EntityIcon
-            color={ENTITY_COLOR}
-            className="mr-1.5 size-6 p-1 bg-entity/10 rounded-full"
-          />
+          <EntityIcon className="mr-1.5" />
           Add node
         </DropdownMenuItem>
       </OptionsMenu>

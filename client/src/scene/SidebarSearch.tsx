@@ -7,11 +7,28 @@ import {
   ComboboxItem,
   ComboboxList,
 } from "@/components/ui/combobox";
-import { cn } from "@/lib/utils";
 import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { TYPE_ICONS } from "./typeIcons";
-import { ENTITY_COLOR, ORBIT_COLOR, SPACE_COLOR } from "@/scene/colors";
+import { EntityIcon, ENTITY_COLOR, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+
+const RESULT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
+
+function ResultIcon({ type }: { type: SearchResult["type"] }) {
+  switch (type) {
+    case "space":
+      return <SpaceIcon className={RESULT_ICON_CLASS} />;
+    case "orbit":
+      return <OrbitIcon className={RESULT_ICON_CLASS} />;
+    case "entity":
+      return <EntityIcon className={RESULT_ICON_CLASS} />;
+    case "project": {
+      const ProjectIcon = TYPE_ICONS.project;
+      return <ProjectIcon color={ENTITY_COLOR} className={RESULT_ICON_CLASS} />;
+    }
+  }
+}
+
 // Only entity/orbit results are tab-able (spaces/projects aren't part of the tab-based reveal
 // flow — plan.md: "Spaces: not part of the reveal flow"), so they're shown but not selectable.
 function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" {
@@ -71,17 +88,6 @@ export function SidebarSearch() {
         <ComboboxEmpty>No results.</ComboboxEmpty>
         <ComboboxList>
           {(result: SearchResult) => {
-            const iconColor = () => {
-              switch (result.type) {
-                case "space":
-                  return SPACE_COLOR;
-                case "orbit":
-                  return ORBIT_COLOR;
-                default:
-                  return ENTITY_COLOR;
-              }
-            };
-            const Icon = TYPE_ICONS[result.type];
             const selectable = isSelectable(result.type);
             return (
               <ComboboxItem
@@ -90,15 +96,7 @@ export function SidebarSearch() {
                 disabled={!selectable}
                 className={!selectable ? "text-muted-foreground" : undefined}
               >
-                <Icon
-                  color={iconColor()}
-                  className={cn(
-                    "size-4 p-0.5 shrink-0 rounded-full",
-                    result.type === "space" && "bg-space/10",
-                    result.type === "orbit" && "bg-orbit/10",
-                    result.type === "entity" && "bg-entity/10",
-                  )}
-                />
+                <ResultIcon type={result.type} />
                 <span className="truncate">{result.name}</span>
                 <span className="ml-auto text-xs capitalize">
                   {result.type}

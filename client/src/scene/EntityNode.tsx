@@ -1,7 +1,7 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { useModelStore } from "@/store/store";
 import type { Entity } from "@/store/types";
-import { ENTITY_COLOR } from "./colors";
+import { ENTITY_COLOR } from "./SidebarTypeIcons";
 import { RadialLabel } from "./RadialLabel";
 
 // Not GPU-instanced yet — fine at the node counts this tool targets (schemas/topologies,

@@ -5,7 +5,7 @@ import type { Space } from "@/store/types";
 import { BoundaryLabel } from "./BoundaryLabel";
 import { BoundarySphere } from "./BoundarySphere";
 import { computeSpaceRadius, isSpaceEmpty } from "./bounds";
-import { SPACE_COLOR } from "./colors";
+import { SPACE_COLOR } from "./SidebarTypeIcons";
 import { EntityNode } from "./EntityNode";
 import { OrbitBoundary } from "./OrbitBoundary";
 import { useViewStore } from "./viewStore";
