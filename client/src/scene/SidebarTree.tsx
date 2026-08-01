@@ -61,7 +61,10 @@ function OptionsMenu({
   // events along the *component* tree (not the DOM tree) — so without this, picking "Visible"
   // or an "Add ..." item here would also fire the row's own onClick={() => focusOn(...)} above it.
   return (
-    <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex items-center pr-0.5"
+      onClick={(e) => e.stopPropagation()}
+    >
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
