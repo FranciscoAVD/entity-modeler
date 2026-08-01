@@ -39,13 +39,15 @@ export function CameraRig() {
   const resetViewToken = useViewStore((state) => state.resetViewToken);
   const focusTarget = useViewStore((state) => state.focusTarget);
   const focusToken = useViewStore((state) => state.focusToken);
-  const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
-  const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const prevFocusTokenRef = useRef(0);
 
   // Recomputes the fly-to target only when the active tab, a reset request, or an explicit
   // sidebar focus request changes, not every frame — the per-frame animation itself lives in
-  // useFrame below.
+  // useFrame below. Visibility toggles are deliberately NOT a dependency here: hiddenSpaceIds/
+  // hiddenOrbitIds are only read as a gate at the moment one of the above actually fires (fresh
+  // via getState(), same as model state below), never as a trigger in their own right — otherwise
+  // toggling visibility on/off an object that happens to be the current focus would itself cause
+  // a re-tween, which reads as the camera randomly jumping when you show/hide something.
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls) return;
@@ -55,6 +57,8 @@ export function CameraRig() {
 
     const focusRequested = focusToken !== prevFocusTokenRef.current;
     prevFocusTokenRef.current = focusToken;
+
+    const { hiddenSpaceIds, hiddenOrbitIds } = useViewStore.getState();
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),
@@ -78,7 +82,7 @@ export function CameraRig() {
       toTarget,
       startTime: performance.now(),
     };
-  }, [activeTabId, resetViewToken, focusToken, focusTarget, hiddenSpaceIds, hiddenOrbitIds, camera]);
+  }, [activeTabId, resetViewToken, focusToken, focusTarget, camera]);
 
   useFrame(() => {
     const controls = controlsRef.current;
