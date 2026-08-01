@@ -98,11 +98,16 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
   );
   const focusOn = useViewStore((state) => state.focusOn);
 
+  // A hidden object has no scene geometry to fly to — resolveCameraFocus refuses to focus it
+  // and falls through to whichever tab is currently active instead, which reads as the camera
+  // randomly jumping to an unrelated object. Don't even request the focus in that case.
   return (
     <div>
       <div
-        className={`flex cursor-pointer items-center gap-2 rounded font-medium hover:bg-muted/50 ${hidden ? "text-muted-foreground" : ""}`}
-        onClick={() => focusOn(space.id, "space")}
+        className={`flex items-center gap-2 rounded font-medium ${
+          hidden ? "text-muted-foreground" : "cursor-pointer hover:bg-muted/50"
+        }`}
+        onClick={hidden ? undefined : () => focusOn(space.id, "space")}
       >
         <SpaceIcon className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">
@@ -153,8 +158,10 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
 
   return (
     <div
-      className="text-muted-foreground flex cursor-pointer items-center gap-2 rounded hover:bg-muted/50"
-      onClick={() => focusOn(orbit.id, "orbit")}
+      className={`text-muted-foreground flex items-center gap-2 rounded ${
+        hidden ? "" : "cursor-pointer hover:bg-muted/50"
+      }`}
+      onClick={hidden ? undefined : () => focusOn(orbit.id, "orbit")}
     >
       <OrbitIcon className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">

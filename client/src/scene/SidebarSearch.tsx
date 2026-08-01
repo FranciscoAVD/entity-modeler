@@ -11,6 +11,7 @@ import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { TYPE_ICONS } from "./typeIcons";
 import { EntityIcon, ENTITY_COLOR, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { isEntityVisible, isOrbitVisible } from "./visibility";
 import { useViewStore } from "./viewStore";
 
 const RESULT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
@@ -55,15 +56,26 @@ export function SidebarSearch() {
   const orbits = useModelStore((state) => state.orbits);
   const entities = useModelStore((state) => state.entities);
   const focusOn = useViewStore((state) => state.focusOn);
+  const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
+  const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
     return searchAll({ projects, spaces, orbits, entities }, query);
   }, [query, projects, spaces, orbits, entities]);
 
+  // A hidden result has no scene geometry to fly to — resolveCameraFocus refuses to focus it
+  // and falls through to whichever tab is currently active instead, which reads as the camera
+  // randomly jumping to an unrelated object. Don't even request the focus in that case (still
+  // clear the query so the dropdown closes, so the click doesn't feel unresponsive).
   const handleValueChange = (result: SearchResult | null) => {
     if (!result || !isSelectable(result.type)) return;
-    focusOn(result.id, result.type);
+    const modelState = useModelStore.getState();
+    const visible =
+      result.type === "orbit"
+        ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
+        : isEntityVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
+    if (visible) focusOn(result.id, result.type);
     setQuery("");
   };
 
