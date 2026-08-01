@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "bun:test";
 import { useModelStore } from "@/store/store";
 import { DEFAULT_FOCUS_TARGET, resolveCameraFocus } from "./cameraFocus";
 
+const NONE = new Set<string>();
+
 beforeEach(() => {
   useModelStore.setState({
     projects: new Map(),
@@ -16,7 +18,7 @@ beforeEach(() => {
 
 describe("resolveCameraFocus", () => {
   it("defaults to the overview when no tab is active", () => {
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
     expect(focus.key).toBe("reset:0");
   });
@@ -28,7 +30,7 @@ describe("resolveCameraFocus", () => {
     const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
     openTab(entityId, "entity");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
     expect(focus.key).toBe(`entity:${entityId}`);
     expect(focus.target).toEqual({ x: 11, y: 0, z: 0 });
   });
@@ -40,7 +42,7 @@ describe("resolveCameraFocus", () => {
     const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 2, y: 0, z: 0 } });
     openTab(orbitId, "orbit");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
     expect(focus.key).toBe(`orbit:${orbitId}`);
     expect(focus.target).toEqual({ x: 2, y: 0, z: 0 });
     expect(focus.distance).toBeGreaterThan(0);
@@ -48,7 +50,7 @@ describe("resolveCameraFocus", () => {
 
   it("falls back to the overview for a stale tab id that's no longer open", () => {
     useModelStore.setState({ activeTabId: "gone" });
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
   });
 
@@ -61,7 +63,7 @@ describe("resolveCameraFocus", () => {
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
     openTab(relId, "relationship");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
     expect(focus.key).toBe(`relationship:${relId}`);
     expect(focus.target).toEqual({ x: 5, y: 0, z: 0 });
     expect(focus.distance).toBeGreaterThan(0);
@@ -75,7 +77,7 @@ describe("resolveCameraFocus", () => {
     const entityId = addEntity({ spaceId, name: "E" });
     openTab(entityId, "entity");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 1, true, null, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 1, true, null, false, NONE, NONE);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
     expect(focus.key).toBe("reset:1");
   });
@@ -91,6 +93,8 @@ describe("resolveCameraFocus", () => {
       false,
       { id: spaceId, type: "space" },
       true,
+      NONE,
+      NONE,
     );
     expect(focus.key).toBe(`space:${spaceId}`);
     expect(focus.target).toEqual({ x: 4, y: 0, z: 0 });
@@ -113,6 +117,8 @@ describe("resolveCameraFocus", () => {
       false,
       { id: orbitId, type: "orbit" },
       true,
+      NONE,
+      NONE,
     );
     expect(focus.key).toBe(`orbit:${orbitId}`);
   });
@@ -133,7 +139,48 @@ describe("resolveCameraFocus", () => {
       false,
       { id: orbitId, type: "orbit" },
       false,
+      NONE,
+      NONE,
     );
     expect(focus.key).toBe(`entity:${entityId}`);
+  });
+
+  // The concrete bug: hiding an object (or clicking a hidden row/search result) must never
+  // leave the camera pointed at it — there's nothing rendered there to look at.
+  it("does not focus an explicit target whose space is hidden", () => {
+    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const entityId = addEntity({ spaceId, name: "E" });
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      0,
+      false,
+      { id: entityId, type: "entity" },
+      true,
+      new Set([spaceId]),
+      NONE,
+    );
+    expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
+  });
+
+  it("falls back to the overview when the active tab's entity becomes hidden", () => {
+    const { addProject, addSpace, addEntity, openTab } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const entityId = addEntity({ spaceId, name: "E" });
+    openTab(entityId, "entity");
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      0,
+      false,
+      null,
+      false,
+      new Set([spaceId]),
+      NONE,
+    );
+    expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
   });
 });

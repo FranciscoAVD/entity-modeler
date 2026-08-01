@@ -39,6 +39,8 @@ export function CameraRig() {
   const resetViewToken = useViewStore((state) => state.resetViewToken);
   const focusTarget = useViewStore((state) => state.focusTarget);
   const focusToken = useViewStore((state) => state.focusToken);
+  const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
+  const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const prevFocusTokenRef = useRef(0);
 
   // Recomputes the fly-to target only when the active tab, a reset request, or an explicit
@@ -60,6 +62,8 @@ export function CameraRig() {
       resetRequested,
       focusTarget,
       focusRequested,
+      hiddenSpaceIds,
+      hiddenOrbitIds,
     );
     if (focus.key === focusKeyRef.current) return;
     focusKeyRef.current = focus.key;
@@ -74,7 +78,7 @@ export function CameraRig() {
       toTarget,
       startTime: performance.now(),
     };
-  }, [activeTabId, resetViewToken, focusToken, focusTarget, camera]);
+  }, [activeTabId, resetViewToken, focusToken, focusTarget, hiddenSpaceIds, hiddenOrbitIds, camera]);
 
   useFrame(() => {
     const controls = controlsRef.current;

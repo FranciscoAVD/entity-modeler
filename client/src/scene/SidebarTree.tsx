@@ -57,30 +57,34 @@ function OptionsMenu({
   onToggleVisible: () => void;
   children: React.ReactNode;
 }) {
+  // DropdownMenuContent renders through a Portal, but React still bubbles its synthetic click
+  // events along the *component* tree (not the DOM tree) — so without this, picking "Visible"
+  // or an "Add ..." item here would also fire the row's own onClick={() => focusOn(...)} above it.
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`${label} options`}
-          className="text-muted-foreground size-auto shrink-0 rounded p-0.5"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MoreVertical className="size-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuCheckboxItem
-          checked={visible}
-          onCheckedChange={onToggleVisible}
-        >
-          Visible
-        </DropdownMenuCheckboxItem>
-        <DropdownMenuSeparator />
-        {children}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div onClick={(e) => e.stopPropagation()}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`${label} options`}
+            className="text-muted-foreground size-auto shrink-0 rounded p-0.5"
+          >
+            <MoreVertical className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuCheckboxItem
+            checked={visible}
+            onCheckedChange={onToggleVisible}
+          >
+            Visible
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuSeparator />
+          {children}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 
