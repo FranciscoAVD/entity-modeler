@@ -16,7 +16,7 @@ beforeEach(() => {
 
 describe("resolveCameraFocus", () => {
   it("defaults to the overview when no tab is active", () => {
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
     expect(focus.key).toBe("reset:0");
   });
@@ -28,7 +28,7 @@ describe("resolveCameraFocus", () => {
     const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
     openTab(entityId, "entity");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
     expect(focus.key).toBe(`entity:${entityId}`);
     expect(focus.target).toEqual({ x: 11, y: 0, z: 0 });
   });
@@ -40,7 +40,7 @@ describe("resolveCameraFocus", () => {
     const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 2, y: 0, z: 0 } });
     openTab(orbitId, "orbit");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
     expect(focus.key).toBe(`orbit:${orbitId}`);
     expect(focus.target).toEqual({ x: 2, y: 0, z: 0 });
     expect(focus.distance).toBeGreaterThan(0);
@@ -48,7 +48,7 @@ describe("resolveCameraFocus", () => {
 
   it("falls back to the overview for a stale tab id that's no longer open", () => {
     useModelStore.setState({ activeTabId: "gone" });
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
   });
 
@@ -61,7 +61,7 @@ describe("resolveCameraFocus", () => {
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
     openTab(relId, "relationship");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 0, false);
+    const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false);
     expect(focus.key).toBe(`relationship:${relId}`);
     expect(focus.target).toEqual({ x: 5, y: 0, z: 0 });
     expect(focus.distance).toBeGreaterThan(0);
@@ -75,8 +75,65 @@ describe("resolveCameraFocus", () => {
     const entityId = addEntity({ spaceId, name: "E" });
     openTab(entityId, "entity");
 
-    const focus = resolveCameraFocus(useModelStore.getState(), 1, true);
+    const focus = resolveCameraFocus(useModelStore.getState(), 1, true, null, false);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
     expect(focus.key).toBe("reset:1");
+  });
+
+  it("focuses an explicit space target, sized to its radius", () => {
+    const { addProject, addSpace } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S", origin: { x: 4, y: 0, z: 0 } });
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      0,
+      false,
+      { id: spaceId, type: "space" },
+      true,
+    );
+    expect(focus.key).toBe(`space:${spaceId}`);
+    expect(focus.target).toEqual({ x: 4, y: 0, z: 0 });
+    expect(focus.distance).toBeGreaterThan(0);
+  });
+
+  // Sidebar clicks (focusOn) must move the camera without disturbing whichever tab/panel is
+  // already open — an explicit focus request wins over the active tab.
+  it("an explicit focus request overrides an active tab", () => {
+    const { addProject, addSpace, addEntity, addOrbit, openTab } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const entityId = addEntity({ spaceId, name: "E" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    openTab(entityId, "entity");
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      0,
+      false,
+      { id: orbitId, type: "orbit" },
+      true,
+    );
+    expect(focus.key).toBe(`orbit:${orbitId}`);
+  });
+
+  // focusRequested is only true in the render right after focusOn fires — a stale focusTarget
+  // left over from a prior click must not keep overriding the active tab on every re-render.
+  it("falls back to the active tab when focusTarget is stale (not freshly requested)", () => {
+    const { addProject, addSpace, addEntity, addOrbit, openTab } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const entityId = addEntity({ spaceId, name: "E" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    openTab(entityId, "entity");
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      0,
+      false,
+      { id: orbitId, type: "orbit" },
+      false,
+    );
+    expect(focus.key).toBe(`entity:${entityId}`);
   });
 });

@@ -37,9 +37,13 @@ export function CameraRig() {
 
   const activeTabId = useModelStore((state) => state.activeTabId);
   const resetViewToken = useViewStore((state) => state.resetViewToken);
+  const focusTarget = useViewStore((state) => state.focusTarget);
+  const focusToken = useViewStore((state) => state.focusToken);
+  const prevFocusTokenRef = useRef(0);
 
-  // Recomputes the fly-to target only when the active tab or a reset request changes,
-  // not every frame — the per-frame animation itself lives in useFrame below.
+  // Recomputes the fly-to target only when the active tab, a reset request, or an explicit
+  // sidebar focus request changes, not every frame — the per-frame animation itself lives in
+  // useFrame below.
   useEffect(() => {
     const controls = controlsRef.current;
     if (!controls) return;
@@ -47,7 +51,16 @@ export function CameraRig() {
     const resetRequested = resetViewToken !== prevResetTokenRef.current;
     prevResetTokenRef.current = resetViewToken;
 
-    const focus = resolveCameraFocus(useModelStore.getState(), resetViewToken, resetRequested);
+    const focusRequested = focusToken !== prevFocusTokenRef.current;
+    prevFocusTokenRef.current = focusToken;
+
+    const focus = resolveCameraFocus(
+      useModelStore.getState(),
+      resetViewToken,
+      resetRequested,
+      focusTarget,
+      focusRequested,
+    );
     if (focus.key === focusKeyRef.current) return;
     focusKeyRef.current = focus.key;
 
@@ -61,7 +74,7 @@ export function CameraRig() {
       toTarget,
       startTime: performance.now(),
     };
-  }, [activeTabId, resetViewToken, camera]);
+  }, [activeTabId, resetViewToken, focusToken, focusTarget, camera]);
 
   useFrame(() => {
     const controls = controlsRef.current;

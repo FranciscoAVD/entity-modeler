@@ -11,6 +11,7 @@ import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { TYPE_ICONS } from "./typeIcons";
 import { EntityIcon, ENTITY_COLOR, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { useViewStore } from "./viewStore";
 
 const RESULT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
 
@@ -29,8 +30,10 @@ function ResultIcon({ type }: { type: SearchResult["type"] }) {
   }
 }
 
-// Only entity/orbit results are tab-able (spaces/projects aren't part of the tab-based reveal
-// flow — plan.md: "Spaces: not part of the reveal flow"), so they're shown but not selectable.
+// Only entity/orbit results are focusable (projects have no scene geometry to fly to, and
+// spaces aren't part of the tab-based reveal flow — plan.md: "Spaces: not part of the reveal
+// flow" — though they're still focusable from the sidebar tree via focusOn), so they're shown
+// but not selectable here.
 function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" {
   return type === "entity" || type === "orbit";
 }
@@ -51,7 +54,7 @@ export function SidebarSearch() {
   const spaces = useModelStore((state) => state.spaces);
   const orbits = useModelStore((state) => state.orbits);
   const entities = useModelStore((state) => state.entities);
-  const openTab = useModelStore((state) => state.openTab);
+  const focusOn = useViewStore((state) => state.focusOn);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
@@ -60,7 +63,7 @@ export function SidebarSearch() {
 
   const handleValueChange = (result: SearchResult | null) => {
     if (!result || !isSelectable(result.type)) return;
-    openTab(result.id, result.type);
+    focusOn(result.id, result.type);
     setQuery("");
   };
 

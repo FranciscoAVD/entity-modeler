@@ -1,5 +1,12 @@
 import { create } from "zustand";
 
+export type FocusableType = "space" | "orbit" | "entity";
+
+export interface FocusTarget {
+  id: string;
+  type: FocusableType;
+}
+
 // Rendering-only visibility toggles — kept separate from the model store since
 // hiding a space/orbit is a view concern, not a change to the underlying data (plan.md decision #5).
 interface ViewState {
@@ -10,6 +17,12 @@ interface ViewState {
   // Incremented to request a camera fly-to-overview independent of tab state (plan.md's "reset view" control).
   resetViewToken: number;
   requestResetView(): void;
+  // Sidebar-driven camera focus, independent of tab/selection state — moves the camera without
+  // opening the details panel (unlike clicking an object in the 3D scene, which does both via
+  // openTab). focusToken lets CameraRig detect "just requested" even when re-focusing the same id.
+  focusTarget: FocusTarget | null;
+  focusToken: number;
+  focusOn(id: string, type: FocusableType): void;
 }
 
 function toggle(set: Set<string>, id: string): Set<string> {
@@ -35,5 +48,12 @@ export const useViewStore = create<ViewState>()((set, get) => ({
 
   requestResetView() {
     set({ resetViewToken: get().resetViewToken + 1 });
+  },
+
+  focusTarget: null,
+  focusToken: 0,
+
+  focusOn(id, type) {
+    set({ focusTarget: { id, type }, focusToken: get().focusToken + 1 });
   },
 }));

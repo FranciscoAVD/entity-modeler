@@ -65,6 +65,7 @@ function OptionsMenu({
           size="icon-xs"
           aria-label={`${label} options`}
           className="text-muted-foreground size-auto shrink-0 rounded p-0.5"
+          onClick={(e) => e.stopPropagation()}
         >
           <MoreVertical className="size-3.5" />
         </Button>
@@ -91,11 +92,13 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
   const toggleSpaceVisibility = useViewStore(
     (state) => state.toggleSpaceVisibility,
   );
+  const focusOn = useViewStore((state) => state.focusOn);
 
   return (
     <div>
       <div
-        className={`flex items-center gap-2 font-medium ${hidden ? "text-muted-foreground" : ""}`}
+        className={`flex cursor-pointer items-center gap-2 rounded font-medium hover:bg-muted/50 ${hidden ? "text-muted-foreground" : ""}`}
+        onClick={() => focusOn(space.id, "space")}
       >
         <SpaceIcon className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">
@@ -142,9 +145,13 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
   const toggleOrbitVisibility = useViewStore(
     (state) => state.toggleOrbitVisibility,
   );
+  const focusOn = useViewStore((state) => state.focusOn);
 
   return (
-    <div className="text-muted-foreground flex items-center gap-2">
+    <div
+      className="text-muted-foreground flex cursor-pointer items-center gap-2 rounded hover:bg-muted/50"
+      onClick={() => focusOn(orbit.id, "orbit")}
+    >
       <OrbitIcon className="shrink-0" />
       <span className="min-w-0 flex-1 truncate">
         {orbit.label ?? orbit.name}
