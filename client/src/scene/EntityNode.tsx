@@ -1,4 +1,5 @@
 import type { ThreeEvent } from "@react-three/fiber";
+import { useState } from "react";
 import { useModelStore } from "@/store/store";
 import type { Entity } from "@/store/types";
 import { ENTITY_COLOR } from "./SidebarTypeIcons";
@@ -12,6 +13,11 @@ export const ENTITY_RADIUS = 0.6;
 export function EntityNode({ entity }: { entity: Entity }) {
   const isActive = useModelStore((state) => state.activeTabId === entity.id);
   const openTab = useModelStore((state) => state.openTab);
+  const [hovered, setHovered] = useState(false);
+  // Hover previews the same emissive treatment as "active" — an obvious cue for what
+  // the mouse is about to click, using the object's own selected-state look rather than
+  // introducing a second highlight color.
+  const highlighted = isActive || hovered;
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
@@ -21,10 +27,12 @@ export function EntityNode({ entity }: { entity: Entity }) {
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     document.body.style.cursor = "pointer";
+    setHovered(true);
   };
 
   const handlePointerOut = () => {
     document.body.style.cursor = "auto";
+    setHovered(false);
   };
 
   return (
@@ -40,8 +48,8 @@ export function EntityNode({ entity }: { entity: Entity }) {
           color={ENTITY_COLOR}
           roughness={0.4}
           metalness={0.1}
-          emissive={isActive ? ENTITY_COLOR : "#000000"}
-          emissiveIntensity={isActive ? 0.8 : 0}
+          emissive={highlighted ? ENTITY_COLOR : "#000000"}
+          emissiveIntensity={highlighted ? 0.8 : 0}
         />
       </mesh>
       <RadialLabel text={entity.name} radius={ENTITY_RADIUS} color={ENTITY_COLOR} fontSize={0.35} margin={0.25} />

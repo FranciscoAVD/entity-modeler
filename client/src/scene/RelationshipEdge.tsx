@@ -1,6 +1,6 @@
 import { Billboard, Line, Text } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import * as THREE from "three";
 import { useShallow } from "zustand/react/shallow";
 import { getWorldPosition, relationshipScope, type RelationshipScope } from "@/store/selectors";
@@ -42,6 +42,9 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
   const isVisible = useModelStore((state) =>
     isRelationshipVisible(state, relationship.id, hiddenSpaceIds, hiddenOrbitIds),
   );
+  const [hovered, setHovered] = useState(false);
+  // Hover previews the same lineWidth/opacity boost as "active", same rationale as EntityNode.
+  const highlighted = isActive || hovered;
 
   const { points, hitGeometry, sourceMarkerPos, targetMarkerPos } = useMemo(() => {
     const control = computeEdgeControlPoint(sourcePos, targetPos);
@@ -75,13 +78,19 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
     openTab(relationship.id, "relationship");
   };
 
+  // Same deferral as the click handler above: an entity sitting on the edge's hit-tube
+  // shouldn't also light up the edge while the mouse is really targeting the entity.
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
     document.body.style.cursor = "pointer";
+    const hitEntity = e.intersections.some((i) => i.object.userData?.entityId);
+    if (hitEntity) return;
+    e.stopPropagation();
+    setHovered(true);
   };
 
   const handlePointerOut = () => {
     document.body.style.cursor = "auto";
+    setHovered(false);
   };
 
   return (
@@ -89,9 +98,9 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
       <Line
         points={points}
         color={style.color}
-        lineWidth={isActive ? style.lineWidth + 1.5 : style.lineWidth}
+        lineWidth={highlighted ? style.lineWidth + 1.5 : style.lineWidth}
         transparent
-        opacity={isActive ? 1 : 0.8}
+        opacity={highlighted ? 1 : 0.8}
         dashed={style.dashed}
         dashSize={0.4}
         gapSize={0.25}

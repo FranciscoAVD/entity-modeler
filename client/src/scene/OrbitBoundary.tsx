@@ -1,4 +1,5 @@
 import type { ThreeEvent } from "@react-three/fiber";
+import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { entitiesInOrbit } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
@@ -17,6 +18,10 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
   const hidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
   const isActive = useModelStore((state) => state.activeTabId === orbit.id);
   const openTab = useModelStore((state) => state.openTab);
+  const [hovered, setHovered] = useState(false);
+  // Hover previews the same boundary opacity boost as "active" (see BoundarySphere), so the
+  // mouse's target is obvious before a click commits to it.
+  const highlighted = isActive || hovered;
 
   if (hidden) return null;
 
@@ -32,18 +37,27 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
     openTab(orbit.id, "orbit");
   };
 
+  // Same deferral as the click handler above: without it, hovering a nested entity would
+  // also light up this orbit's (nearer, larger) boundary, muddying which object is the
+  // actual click target.
   const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
-    e.stopPropagation();
     document.body.style.cursor = "pointer";
+    const hitMoreSpecific = e.intersections.some(
+      (i) => i.object.userData?.entityId || i.object.userData?.relationshipId,
+    );
+    if (hitMoreSpecific) return;
+    e.stopPropagation();
+    setHovered(true);
   };
 
   const handlePointerOut = () => {
     document.body.style.cursor = "auto";
+    setHovered(false);
   };
 
   return (
     <group position={[orbit.origin.x, orbit.origin.y, orbit.origin.z]}>
-      <BoundarySphere radius={radius} color={ORBIT_COLOR} empty={empty} active={isActive} />
+      <BoundarySphere radius={radius} color={ORBIT_COLOR} empty={empty} active={highlighted} />
       <BoundaryLabel text={orbit.label ?? orbit.name} radius={radius} color={ORBIT_COLOR} dimmer />
       <mesh onClick={handleClick} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut}>
         <sphereGeometry args={[radius, 16, 12]} />
