@@ -103,10 +103,10 @@ function OptionsMenu({
   );
 }
 
-// Leading slot mirroring OptionsMenu's trigger footprint (size-auto + p-0.5 around a size-3.5
-// icon) so rows with and without expandable children still line up their type icons in a column.
-// When not expandable, the button is rendered (not swapped for a plain spacer) so the reserved
-// width always matches exactly, rather than duplicating a hand-tuned pixel value.
+// Reserves the real chevron button's exact footprint (same variant/size, no className override)
+// so rows with and without expandable children still line up their type icons in a column. When
+// not expandable, the same button is rendered invisible rather than swapped for a differently
+// sized spacer, which is what let the two drift out of alignment previously.
 function ExpandToggle({
   expandable,
   open,
@@ -122,13 +122,7 @@ function ExpandToggle({
 
   if (!expandable) {
     return (
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        disabled
-        aria-hidden
-        className="size-auto shrink-0 rounded p-0.5 invisible"
-      >
+      <Button variant="ghost" size="icon-xs" disabled aria-hidden className="invisible">
         {chevron}
       </Button>
     );
@@ -159,6 +153,11 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
     (state) => state.toggleSpaceVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
+  // Spaces are never opened as tabs (plan.md: "Spaces: not part of the reveal flow"), so
+  // focusTarget — set by this row's own click and by search — is the only "currently focused"
+  // signal that applies to them.
+  const focusTarget = useViewStore((state) => state.focusTarget);
+  const isFocused = focusTarget?.type === "space" && focusTarget.id === space.id;
   const [open, setOpen] = useState(true);
   const hasChildren = orbits.length > 0 || nodes.length > 0;
 
@@ -169,10 +168,11 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "flex items-center gap-2 rounded font-medium",
+          "flex items-center gap-2 rounded py-1 font-medium",
           hidden
             ? "text-muted-foreground"
             : "cursor-pointer hover:bg-accent/10",
+          isFocused && "bg-accent/10",
         )}
         onClick={hidden ? undefined : () => focusOn(space.id, "space")}
       >
@@ -231,6 +231,13 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
     (state) => state.toggleOrbitVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
+  // "Currently focused" can come from either a direct scene click (sets activeTabId, opens a
+  // tab) or a sidebar/search click (sets focusTarget only, no tab) — check both.
+  const activeTabId = useModelStore((state) => state.activeTabId);
+  const focusTarget = useViewStore((state) => state.focusTarget);
+  const isFocused =
+    activeTabId === orbit.id ||
+    (focusTarget?.type === "orbit" && focusTarget.id === orbit.id);
   const [open, setOpen] = useState(false);
   const hasChildren = nodes.length > 0;
 
@@ -238,8 +245,9 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
         className={cn(
-          "text-muted-foreground flex items-center gap-2 rounded",
+          "text-muted-foreground flex items-center gap-2 rounded py-1",
           !hidden && "cursor-pointer hover:bg-accent/10",
+          isFocused && "bg-accent/10",
         )}
         onClick={hidden ? undefined : () => focusOn(orbit.id, "orbit")}
       >
@@ -282,6 +290,13 @@ function EntityRow({ entity }: { entity: Entity }) {
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const focusOn = useViewStore((state) => state.focusOn);
+  // "Currently focused" can come from either a direct scene click (sets activeTabId, opens a
+  // tab) or a sidebar/search click (sets focusTarget only, no tab) — check both.
+  const activeTabId = useModelStore((state) => state.activeTabId);
+  const focusTarget = useViewStore((state) => state.focusTarget);
+  const isFocused =
+    activeTabId === entity.id ||
+    (focusTarget?.type === "entity" && focusTarget.id === entity.id);
   const hidden =
     hiddenSpaceIds.has(entity.spaceId) ||
     (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId));
@@ -289,8 +304,9 @@ function EntityRow({ entity }: { entity: Entity }) {
   return (
     <div
       className={cn(
-        "text-muted-foreground flex items-center gap-2 rounded",
+        "text-muted-foreground flex items-center gap-2 rounded py-1",
         !hidden && "cursor-pointer hover:bg-accent/10",
+        isFocused && "bg-accent/10",
       )}
       onClick={hidden ? undefined : () => focusOn(entity.id, "entity")}
     >
