@@ -95,10 +95,9 @@ export function Sidebar({
     >
       <div className="flex flex-col gap-4 p-3">
         <div>
-          <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-            Project
+          <h2 className="font-medium text-primary uppercase">
+            {project?.name}
           </h2>
-          <p className="font-medium">{project?.name}</p>
           {project?.description && (
             <p className="text-muted-foreground mt-0.5 text-sm">
               {project.description}
