@@ -6,7 +6,7 @@
 :root {
   --background: #0b0b12;
   --foreground: #e8e6df;
-  --card: #14171c;
+  --card: #1c2028;
   --card-foreground: var(--foreground);
   --popover: var(--card);
   --popover-foreground: var(--foreground);
@@ -19,7 +19,7 @@
   --accent: #f2a65a;
   --accent-foreground: oklch(0.205 0 0);
   --destructive: #d97757;
-  --border: #262b33;
+  --border: #3a4150;
   --input: oklch(0.922 0 0);
   --ring: var(--border) /*oklch(0.708 0 0)*/;
   --chart-1: oklch(0.87 0 0);

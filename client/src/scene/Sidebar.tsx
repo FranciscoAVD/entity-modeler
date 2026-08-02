@@ -89,7 +89,7 @@ export function Sidebar({
   return (
     <div
       className={cn(
-        "bg-card/80 flex flex-col overflow-hidden border-r backdrop-blur",
+        "bg-card/70 flex flex-col overflow-hidden border-r backdrop-blur",
         className,
       )}
     >

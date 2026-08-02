@@ -32,7 +32,7 @@ export function Header({
   return (
     <div
       className={cn(
-        "bg-card/80 flex items-center justify-between gap-3 border-b px-3 backdrop-blur",
+        "bg-card/90 flex items-center justify-between gap-3 border-b px-3 backdrop-blur",
         className,
       )}
     >
