@@ -1,6 +1,12 @@
-import { MoreVertical } from "lucide-react";
+import { ChevronRight, MoreVertical } from "lucide-react";
+import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -9,9 +15,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { orbitsInSpace, spacesInProject } from "@/store/selectors";
+import { cn } from "@/lib/utils";
+import {
+  entitiesInOrbit,
+  orbitsInSpace,
+  spacesInProject,
+  ungroupedEntitiesInSpace,
+} from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Orbit, Space } from "@/store/types";
+import type { Entity, Orbit, Space } from "@/store/types";
 import type { PendingCreate } from "./Sidebar";
 import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
@@ -71,7 +83,7 @@ function OptionsMenu({
             variant="ghost"
             size="icon-xs"
             aria-label={`${label} options`}
-            className="text-muted-foreground size-auto shrink-0 rounded p-0.5 hover:bg-accent"
+            className="size-auto shrink-0 rounded p-0.5"
           >
             <MoreVertical className="size-3.5" />
           </Button>
@@ -91,27 +103,80 @@ function OptionsMenu({
   );
 }
 
+// Leading slot mirroring OptionsMenu's trigger footprint (size-auto + p-0.5 around a size-3.5
+// icon) so rows with and without expandable children still line up their type icons in a column.
+// When not expandable, the button is rendered (not swapped for a plain spacer) so the reserved
+// width always matches exactly, rather than duplicating a hand-tuned pixel value.
+function ExpandToggle({
+  expandable,
+  open,
+}: {
+  expandable: boolean;
+  open?: boolean;
+}) {
+  const chevron = (
+    <ChevronRight
+      className={cn("size-3.5 transition-transform", open && "rotate-90")}
+    />
+  );
+
+  if (!expandable) {
+    return (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        disabled
+        aria-hidden
+        className="size-auto shrink-0 rounded p-0.5 invisible"
+      >
+        {chevron}
+      </Button>
+    );
+  }
+
+  return (
+    <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+      <Button variant="ghost" size="icon-xs">
+        {chevron}
+      </Button>
+    </CollapsibleTrigger>
+  );
+}
+
+const CHILD_LIST_CLASS = "border-l border-dashed mt-1.5 ml-2 pl-4 space-y-1.5";
+const CHILD_CONTENT_CLASS =
+  "overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-top-1";
+
 function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
   const orbits = useModelStore(
     useShallow((state) => orbitsInSpace(state, space.id)),
+  );
+  const nodes = useModelStore(
+    useShallow((state) => ungroupedEntitiesInSpace(state, space.id)),
   );
   const hidden = useViewStore((state) => state.hiddenSpaceIds.has(space.id));
   const toggleSpaceVisibility = useViewStore(
     (state) => state.toggleSpaceVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
+  const [open, setOpen] = useState(true);
+  const hasChildren = orbits.length > 0 || nodes.length > 0;
 
   // A hidden object has no scene geometry to fly to — resolveCameraFocus refuses to focus it
   // and falls through to whichever tab is currently active instead, which reads as the camera
   // randomly jumping to an unrelated object. Don't even request the focus in that case.
   return (
-    <div>
+    <Collapsible open={open} onOpenChange={setOpen}>
       <div
-        className={`flex items-center gap-2 rounded font-medium ${
-          hidden ? "text-muted-foreground" : "cursor-pointer hover:bg-accent/10"
-        }`}
+        className={cn(
+          "flex items-center gap-2 rounded font-medium",
+          hidden
+            ? "text-muted-foreground"
+            : "cursor-pointer hover:bg-accent/10",
+        )}
         onClick={hidden ? undefined : () => focusOn(space.id, "space")}
       >
+        <ExpandToggle expandable={hasChildren} open={open} />
         <SpaceIcon className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">
           {space.label ?? space.name}
@@ -139,55 +204,99 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
           </DropdownMenuItem>
         </OptionsMenu>
       </div>
-      <ul className="border-l border-dashed mt-1.5 ml-2 pl-4 space-y-1.5">
-        {orbits.map((orbit) => (
-          <OrbitRow
-            key={orbit.id}
-            orbit={orbit}
-            onRequestCreate={onRequestCreate}
-          />
-        ))}
-      </ul>
-    </div>
+      <CollapsibleContent className={CHILD_CONTENT_CLASS}>
+        <ul className={CHILD_LIST_CLASS}>
+          {orbits.map((orbit) => (
+            <OrbitRow
+              key={orbit.id}
+              orbit={orbit}
+              onRequestCreate={onRequestCreate}
+            />
+          ))}
+          {nodes.map((entity) => (
+            <EntityRow key={entity.id} entity={entity} />
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
 function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
+  const nodes = useModelStore(
+    useShallow((state) => entitiesInOrbit(state, orbit.id)),
+  );
   const hidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
   const toggleOrbitVisibility = useViewStore(
     (state) => state.toggleOrbitVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
+  const [open, setOpen] = useState(false);
+  const hasChildren = nodes.length > 0;
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div
+        className={cn(
+          "text-muted-foreground flex items-center gap-2 rounded",
+          !hidden && "cursor-pointer hover:bg-accent/10",
+        )}
+        onClick={hidden ? undefined : () => focusOn(orbit.id, "orbit")}
+      >
+        <ExpandToggle expandable={hasChildren} open={open} />
+        <OrbitIcon className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">
+          {orbit.label ?? orbit.name}
+        </span>
+        <OptionsMenu
+          label={orbit.name}
+          visible={!hidden}
+          onToggleVisible={() => toggleOrbitVisibility(orbit.id)}
+        >
+          <DropdownMenuItem
+            onSelect={() =>
+              onRequestCreate({
+                type: "node",
+                spaceId: orbit.spaceId,
+                orbitId: orbit.id,
+              })
+            }
+          >
+            <EntityIcon className="mr-1.5" />
+            Add node
+          </DropdownMenuItem>
+        </OptionsMenu>
+      </div>
+      <CollapsibleContent className={CHILD_CONTENT_CLASS}>
+        <ul className={CHILD_LIST_CLASS}>
+          {nodes.map((entity) => (
+            <EntityRow key={entity.id} entity={entity} />
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function EntityRow({ entity }: { entity: Entity }) {
+  const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
+  const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
+  const focusOn = useViewStore((state) => state.focusOn);
+  const hidden =
+    hiddenSpaceIds.has(entity.spaceId) ||
+    (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId));
 
   return (
     <div
-      className={`text-muted-foreground flex items-center gap-2 rounded ${
-        hidden ? "" : "cursor-pointer hover:bg-accent/10"
-      }`}
-      onClick={hidden ? undefined : () => focusOn(orbit.id, "orbit")}
+      className={cn(
+        "text-muted-foreground flex items-center gap-2 rounded",
+        !hidden && "cursor-pointer hover:bg-accent/10",
+      )}
+      onClick={hidden ? undefined : () => focusOn(entity.id, "entity")}
     >
-      <OrbitIcon className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate">
-        {orbit.label ?? orbit.name}
-      </span>
-      <OptionsMenu
-        label={orbit.name}
-        visible={!hidden}
-        onToggleVisible={() => toggleOrbitVisibility(orbit.id)}
-      >
-        <DropdownMenuItem
-          onSelect={() =>
-            onRequestCreate({
-              type: "node",
-              spaceId: orbit.spaceId,
-              orbitId: orbit.id,
-            })
-          }
-        >
-          <EntityIcon className="mr-1.5" />
-          Add node
-        </DropdownMenuItem>
-      </OptionsMenu>
+      <ExpandToggle expandable={false} />
+      <EntityIcon className="shrink-0" />
+      <span className="min-w-0 flex-1 truncate">{entity.name}</span>
     </div>
   );
 }

@@ -49,14 +49,16 @@ export function Header({
             ))}
           </SelectContent>
         </Select>
-        <Button size="icon-xs" onClick={() => setCreatingProject(true)}>
+        <Button
+          variant="icon"
+          size="icon-xs"
+          onClick={() => setCreatingProject(true)}
+        >
           <Plus />
         </Button>
       </div>
 
-      <Button variant="secondary" size="sm" onClick={requestResetView}>
-        Reset view
-      </Button>
+      <Button onClick={requestResetView}>Reset view</Button>
 
       <CreateDialog
         open={creatingProject}

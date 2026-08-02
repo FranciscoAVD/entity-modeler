@@ -44,7 +44,7 @@ function SectionHeader({
       </h2>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button size="icon-xs">
+          <Button variant="icon" size="icon-xs">
             <Plus />
           </Button>
         </DropdownMenuTrigger>
@@ -89,36 +89,40 @@ export function Sidebar({
   return (
     <div
       className={cn(
-        "bg-card/80 flex flex-col gap-4 overflow-y-auto border-r p-3 backdrop-blur",
+        "bg-card/80 flex flex-col overflow-hidden border-r backdrop-blur",
         className,
       )}
     >
-      <div>
-        <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-          Project
-        </h2>
-        <p className="font-medium">{project?.name}</p>
-        {project?.description && (
-          <p className="text-muted-foreground mt-0.5 text-sm">{project.description}</p>
-        )}
+      <div className="flex flex-col gap-4 p-3">
+        <div>
+          <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+            Project
+          </h2>
+          <p className="font-medium">{project?.name}</p>
+          {project?.description && (
+            <p className="text-muted-foreground mt-0.5 text-sm">
+              {project.description}
+            </p>
+          )}
+        </div>
+
+        <div>
+          <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+            Search
+          </h2>
+          <SidebarSearch />
+        </div>
+
+        <div>
+          <SectionHeader
+            label="Relationships"
+            menuLabel="Add relationship"
+            onAction={() => setRelationshipDialogOpen(true)}
+          />
+        </div>
       </div>
 
-      <div>
-        <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
-          Search
-        </h2>
-        <SidebarSearch />
-      </div>
-
-      <div>
-        <SectionHeader
-          label="Relationships"
-          menuLabel="Add relationship"
-          onAction={() => setRelationshipDialogOpen(true)}
-        />
-      </div>
-
-      <div>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-4 pb-3">
         <SectionHeader
           label="Spaces"
           menuLabel="Add space"
