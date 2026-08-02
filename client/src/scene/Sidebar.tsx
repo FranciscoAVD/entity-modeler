@@ -1,21 +1,13 @@
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { useShallow } from "zustand/react/shallow";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { allProjects } from "@/store/selectors";
+import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { AddRelationshipDialog } from "./AddRelationshipDialog";
 import { CreateDialog } from "./CreateDialog";
@@ -23,7 +15,6 @@ import { SidebarSearch } from "./SidebarSearch";
 import { SidebarTree } from "./SidebarTree";
 
 export type PendingCreate =
-  | { type: "project" }
   | { type: "space" }
   | { type: "orbit"; spaceId: string }
   | { type: "node"; spaceId: string; orbitId?: string };
@@ -32,7 +23,6 @@ const DIALOG_CONFIG: Record<
   PendingCreate["type"],
   { title: string; placeholder: string }
 > = {
-  project: { title: "New project", placeholder: "Project name" },
   space: { title: "New space", placeholder: "Space name" },
   orbit: { title: "New orbit", placeholder: "Orbit name" },
   node: { title: "New node", placeholder: "Node name" },
@@ -68,13 +58,12 @@ function SectionHeader({
 
 export function Sidebar({
   projectId,
-  onProjectChange,
+  className,
 }: {
   projectId: string;
-  onProjectChange: (projectId: string) => void;
+  className?: string;
 }) {
-  const projects = useModelStore(useShallow((state) => allProjects(state)));
-  const addProject = useModelStore((state) => state.addProject);
+  const project = useModelStore((state) => state.projects.get(projectId));
   const addSpace = useModelStore((state) => state.addSpace);
   const addOrbit = useModelStore((state) => state.addOrbit);
   const addEntity = useModelStore((state) => state.addEntity);
@@ -85,9 +74,6 @@ export function Sidebar({
   const handleCreate = (name: string) => {
     if (!pending) return;
     switch (pending.type) {
-      case "project":
-        onProjectChange(addProject({ name }));
-        break;
       case "space":
         addSpace({ projectId, name });
         break;
@@ -101,25 +87,20 @@ export function Sidebar({
   };
 
   return (
-    <div className="bg-card/80 absolute inset-y-0 left-0 flex w-72 flex-col gap-4 overflow-y-auto border-r p-3 backdrop-blur">
+    <div
+      className={cn(
+        "bg-card/80 flex flex-col gap-4 overflow-y-auto border-r p-3 backdrop-blur",
+        className,
+      )}
+    >
       <div>
-        <SectionHeader
-          label="Project"
-          menuLabel="New project"
-          onAction={() => setPending({ type: "project" })}
-        />
-        <Select value={projectId} onValueChange={onProjectChange}>
-          <SelectTrigger className="w-full font-medium">
-            <SelectValue placeholder="Select project" />
-          </SelectTrigger>
-          <SelectContent>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+          Project
+        </h2>
+        <p className="font-medium">{project?.name}</p>
+        {project?.description && (
+          <p className="text-muted-foreground mt-0.5 text-sm">{project.description}</p>
+        )}
       </div>
 
       <div>

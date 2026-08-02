@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { ResetViewButton } from "@/scene/ResetViewButton";
+import { Overlay } from "@/scene/Overlay";
 import { Scene } from "@/scene/Scene";
-import { Sidebar } from "@/scene/Sidebar";
-import { SidePanel } from "@/scene/SidePanel";
 import { seedDemoProject } from "@/store/seed";
 
 function App() {
@@ -11,9 +9,7 @@ function App() {
   return (
     <div className="relative h-svh w-svw">
       <Scene projectId={projectId} />
-      <Sidebar projectId={projectId} onProjectChange={setProjectId} />
-      <ResetViewButton />
-      <SidePanel />
+      <Overlay projectId={projectId} onProjectChange={setProjectId} />
     </div>
   );
 }
