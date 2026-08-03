@@ -137,7 +137,24 @@ function ExpandToggle({
   );
 }
 
-const CHILD_LIST_CLASS = "border-l border-dashed mt-1.5 ml-2 pl-4 space-y-1.5";
+// pl-6 (24px, no margin) keeps the same total indent as before but puts the ul's own box
+// origin at the row's left edge, so the dashed line's backgroundPosition below can be
+// expressed directly in row-relative pixels instead of fighting an extra margin offset.
+const CHILD_LIST_CLASS = "mt-1.5 pl-6 space-y-1.5";
+// border-dashed's dash/gap spacing isn't controllable via CSS — the browser derives it from
+// border-width. A repeating-linear-gradient background used as a 1px-wide vertical line gives
+// explicit control instead: 6px dash, 6px gap, positioned at 12px — the horizontal center of
+// the chevron button above it (icon-xs Button, size-6 = 24px wide) — so the guide line runs
+// through the toggle icons like a standard file-tree. The 12px is hardcoded to that button
+// size, not derived from it — if ExpandToggle's button size ever changes, this will drift out
+// of alignment silently (no type error, no visual crash, just a line that no longer lines up).
+const DASHED_LINE_STYLE: React.CSSProperties = {
+  backgroundImage:
+    "repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 6px, transparent 6px, transparent 12px)",
+  backgroundPosition: "12px 0",
+  backgroundSize: "1px 100%",
+  backgroundRepeat: "no-repeat",
+};
 const CHILD_CONTENT_CLASS =
   "overflow-hidden data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-top-1 data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-top-1";
 
@@ -205,7 +222,7 @@ function SpaceRow({ space, onRequestCreate }: TreeProps & { space: Space }) {
         </OptionsMenu>
       </div>
       <CollapsibleContent className={CHILD_CONTENT_CLASS}>
-        <ul className={CHILD_LIST_CLASS}>
+        <ul className={CHILD_LIST_CLASS} style={DASHED_LINE_STYLE}>
           {orbits.map((orbit) => (
             <OrbitRow
               key={orbit.id}
@@ -276,7 +293,7 @@ function OrbitRow({ orbit, onRequestCreate }: TreeProps & { orbit: Orbit }) {
         </OptionsMenu>
       </div>
       <CollapsibleContent className={CHILD_CONTENT_CLASS}>
-        <ul className={CHILD_LIST_CLASS}>
+        <ul className={CHILD_LIST_CLASS} style={DASHED_LINE_STYLE}>
           {nodes.map((entity) => (
             <EntityRow key={entity.id} entity={entity} />
           ))}
