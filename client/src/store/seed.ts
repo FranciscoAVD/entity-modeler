@@ -22,20 +22,13 @@ export function seedDemoProject(): string {
     orbitId: populatedOrbit,
     name: "Node 1",
     position: { x: 1, y: 0.5, z: 0 },
-    fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid" },
-      { id: crypto.randomUUID(), name: "email", type: "string" },
-    ],
+    tags: ["billing"],
   });
   const node2 = addEntity({
     spaceId,
     orbitId: populatedOrbit,
     name: "Node 2",
     position: { x: -1, y: -0.5, z: 0.5 },
-    fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid" },
-      { id: crypto.randomUUID(), name: "node1_id", type: "uuid" },
-    ],
   });
 
   addOrbit({ spaceId, name: "Empty Orbit", origin: { x: -3.5, y: 0, z: 0 } });
@@ -44,7 +37,6 @@ export function seedDemoProject(): string {
     spaceId,
     name: "Ungrouped Node",
     position: { x: 0, y: 3, z: -1.5 },
-    fields: [{ id: crypto.randomUUID(), name: "id", type: "uuid" }],
   });
 
   const spaceBeta = addSpace({
@@ -53,14 +45,7 @@ export function seedDemoProject(): string {
     origin: { x: 14, y: 0, z: 0 },
     tags: ["external-facing"],
   });
-  const remoteNode = addEntity({
-    spaceId: spaceBeta,
-    name: "Remote Node",
-    fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid" },
-      { id: crypto.randomUUID(), name: "ungrouped_node_id", type: "uuid" },
-    ],
-  });
+  const remoteNode = addEntity({ spaceId: spaceBeta, name: "Remote Node", tags: ["billing"] });
 
   addRelationship({ sourceId: node1, targetId: node2, cardinality: "1:N" }); // local (same orbit)
   addRelationship({ sourceId: node1, targetId: ungroupedNode, cardinality: "1:1" }); // cross-orbit

@@ -7,7 +7,7 @@ Billboarded text for all labels, offset far enough from anchor geometry to avoid
 Depth cues — fog, distance-based opacity/size falloff
 Curved (Bezier) edges, with distinct styling for cross-space and cross-orbit edges
 
-2. Node geometry: spheres, title-only by default Entities render as plain spheres with only their title shown by default; fields/notes/metadata are click-to-reveal.
+2. Node geometry: spheres, title-only by default Entities render as plain spheres with only their title shown by default; tags/notes/metadata are click-to-reveal.
 
 3. Label placement: offset to avoid rotational overlap Labels anchored at a fixed radial offset from their anchor's center, recomputed each frame toward the camera, positioned just outside the anchor's silhouette. Applies to entity titles, edge titles, and orbit/space labels.
 
@@ -31,15 +31,16 @@ Node and edge info: title always visible; full details click-to-reveal
 
 11. Search: tagged keywords + universal title search
 
-Spaces and orbits can carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod" or "external-facing")
+Spaces, orbits, and entities can all carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod", an orbit "core", or an entity "billing" so it can be found alongside unrelated objects sharing that tag). This was originally a space/orbit-only concept; it's since been extended to entities too
 Projects, spaces, orbits, and entities are searchable by title/name via a simpler substring/fuzzy match, without needing explicit tagging — relationships are excluded since they have no name field
-Tags are a space/orbit-only concept (grouping-level metadata), while title search is universal across every nameable object type
+Tag search and title search stay conceptually separate (exact-match keyword index vs. fuzzy substring match), but both now cover the same three taggable/nameable object types (space/orbit/entity) plus project for title search
+Planned but not built: a global, user-managed tag list (so tags come from a shared vocabulary/autocomplete rather than free-typed strings per object) to group otherwise-unrelated objects across the project — currently tags are just a plain string[] with no central registry, no rename-tag-everywhere, no autocomplete
 
 12. Multi-selection via tabs
 
 A single click on a node/edge/orbit/space only moves the camera (focus-only, same as a sidebar row click); a double-click opens a tab (rather than replacing the current selection), so multiple objects can be inspected side by side — spaces were originally excluded from tabs entirely (see below), but now participate identically to orbits/entities
 Clicking a tab flies the camera to that object — animated (tweened, ease-in-out, ~400–800ms), never an instant snap, to preserve spatial orientation
-Closing a tab clears that object's selection state; if it was active, the next open tab (or none) becomes active
+Tabs are no longer a user-managed open/close list — this originally had an explicit "close tab" action, but a row of removable chips got cluttered fast with more than a couple objects open. openTabs is now a recency-capped history (the 5 most recently viewed objects, oldest evicted automatically), presented as a single dropdown rather than a chip row. An object's tab is only removed early if the object itself is deleted (cascade), in which case the next remaining tab (or none) becomes active
 A "reset view" control exists independent of tabs, returning to a full-project overview, so users aren't trapped at node-level zoom after opening several tabs
 
 13. Empty space/orbit rendering Tinted, transparent, color-coded spheres/ellipsoids — space, orbit, and entity each get a distinct hue or saturation level so nesting is visually obvious at a glance. For empty groups specifically:
@@ -77,12 +78,9 @@ Orbit {
 
 Entity {
   id, spaceId, orbitId?,      // ← points up to parent Space, optionally an Orbit
-  name, fields: Field[], position: Vector3,  // local to parent space's (or orbit's) origin
-  notes: Note[]
-}
-
-Field {
-  id, name, type
+  name, tags: string[], position: Vector3,  // local to parent space's (or orbit's) origin
+  notes: Note[],
+  metadata?: Record<string, string | number>
 }
 
 Relationship {
@@ -95,6 +93,8 @@ Note {
   id, text, author?, createdAt,
   metadata?: Record<string, string | number>
 }
+
+Entity originally had a fields: Field[] property (Field being { id, name, type, isPK?, isFK? }) modeling database-table columns. That's been removed: a field with no value is a schema declaration, not an attribute of a specific entity instance, which is a narrower assumption (this tool models general entities/relationships, not specifically database schemas — see plan.md's own network-topology example schema under Phase 11) than this tool intends. Entity now carries tags/metadata directly instead, same shape as Space/Orbit.
 
 Store shape: flat maps per type — projects, spaces, orbits, entities, relationships — each keyed by id. "Children of X" views (e.g. spacesInProject(projectId), entitiesInSpace(spaceId), entitiesInOrbit(orbitId)) are derived by filtering/indexing these maps on demand, optionally backed by a maintained parentId -> Set<childId> index for performance, rather than being a second source of truth to keep in sync.
 
@@ -110,23 +110,23 @@ Selection, tabs & search architecture
 
 Selection model
 
-openTabs: { id, type: "entity" | "relationship" | "orbit" | "space" }[]
+openTabs: { id, type: "entity" | "relationship" | "orbit" | "space" }[] — a recency-capped history (5 most recently viewed, oldest evicted), not a user-managed open/close list; see decision #12
 activeTabId: string | null
-A single click on a node/edge/orbit/space in the 3D scene only moves the camera (via the same focusOn/focusTarget mechanism a sidebar row click uses) — it does not add a tab. Double-clicking adds a tab (if not already open) and makes it active
+A single click on a node/edge/orbit/space in the 3D scene only moves the camera (via the same focusOn/focusTarget mechanism a sidebar row click uses) — it does not add a tab. Double-clicking adds it to openTabs (moving it to most-recent if already present) and makes it active
 Making a tab active triggers an animated camera fly-to centered on that object
-Closing a tab removes it from openTabs and clears its selection highlight; if it was active, the next tab (or none) becomes active
-A separate "reset view" action clears camera focus and flies to a default overview position, without necessarily closing tabs
+There's no manual "close" — an entry only leaves openTabs early if its underlying object is deleted (cascade), in which case the next remaining tab (or none) becomes active; otherwise it just ages out once 5 newer objects have been viewed
+A separate "reset view" action clears camera focus and flies to a default overview position, without necessarily affecting openTabs
 
 Search
 
-Text input matches against: space/orbit tags (exact/keyword index) and all nameable object name fields (fuzzy/substring)
+Text input matches against: space/orbit/entity tags (exact/keyword index) and all nameable object name fields (fuzzy/substring)
 Selecting a search result flies the camera to it, same as a single click on a sidebar row or 3D-scene object — it does not open a tab (opening a tab requires a double-click in the 3D scene, or the sidebar row's "View notes" context-menu item)
-Tag index is a simple inverted index (tag -> [space/orbit ids]), rebuilt or incrementally updated on tag edits
+Tag index is a simple inverted index (tag -> [space/orbit/entity ids]), rebuilt or incrementally updated on tag edits
 Rendering: visibility by tier
 Object	Always visible	Revealed on click	Empty-state treatment
 Space	name/label, tint boundary	notes, metadata, tags	dashed/low-opacity boundary, min size floor
 Orbit	name/label (dimmer), tint boundary	notes, metadata, tags	same as space, nested inside it
-Entity	title only, offset-billboarded sphere	fields, notes, metadata	n/a (entities aren't containers)
+Entity	title only, offset-billboarded sphere	notes, metadata, tags	n/a (entities aren't containers)
 Relationship	title only (if present)	cardinality, notes, metadata	n/a
 Click-to-reveal / tab architecture
 
@@ -140,7 +140,7 @@ Spaces: raycast against the same kind of light bounding volume as orbits — spa
 Flow
 
 Click → raycast → resolve { id, type } → focus camera only (single click) or open/focus tab (double-click) → look up record → emit select event
-DOM tab bar + panel: tab bar lists open selections (title + type icon), panel below shows the active tab's full info (title, fields for entities, cardinality for relationships, notes as prose, metadata as key-value table)
+DOM tab bar + panel: the tab bar is a single dropdown (recently-viewed history, title + type icon per option) rather than a row of open-selection chips, panel below shows the active tab's full info (title, tags/metadata for spaces/orbits/entities, cardinality for relationships, notes as prose, metadata as key-value table)
 In-scene highlight on whichever object the active tab represents — currently a static emissive/opacity bump (entity emissive color, edge width/opacity, space/orbit boundary opacity via an `active` prop), not yet an outline shader or an animated pulse
 Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position — not implemented yet
 
@@ -157,7 +157,7 @@ Validates label-tier visual hierarchy, orbit hit-testing, relationship persisten
 
 Phase 1 — Core data model (done — the project switcher is a dropdown rather than a dedicated list/grid page, functionally equivalent to what's described below)
 
-Project/Space/Orbit/Entity/Field/Relationship/Note as above, with tags on Space/Orbit
+Project/Space/Orbit/Entity/Relationship/Note as above, with tags on Space/Orbit/Entity
 Normalized store: flat Map<id, T> per type, parent references point up (Space.projectId, Entity.spaceId/orbitId), no nested child arrays
 Derived "children of X" queries/indices (spacesInProject, entitiesInSpace, entitiesInOrbit) computed from the flat maps, optionally cached via a maintained parentId -> Set<childId> index
 Validation rules: no self-relationships, entities always require a space, cascade delete logic
@@ -195,7 +195,7 @@ Camera-plane-constrained dragging for repositioning entities (modifier key for d
 
 Phase 6 — Tabs, notes & search UI (partially done — tab bar, generic info panel, and search input all exist; add/edit/delete note UI does not, addNote in the store has no UI caller)
 
-Tab bar (open/close/switch), info panel generic across entity/relationship/orbit/space
+Tab bar is now a recently-viewed Select (switch only, no manual open/close — see decision #12), info panel generic across entity/relationship/orbit/space, with entity/orbit/space sharing one GroupDetails renderer since they're now the same shape (tags, metadata, notes)
 Space info now goes through this same panel (SpaceDetails) rather than staying a separate always-on label-only affordance — this reverses the line's original assumption, see the reveal-flow note above
 Search input (tags + titles); results fly the camera like a sidebar-row click, not a full tab-open — see the Search section above
 If authoring tool: add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level
@@ -206,9 +206,9 @@ Force-directed layout within each orbit first, then orbits arranged within their
 Shell/sphere constraint option at each tier to keep things navigable
 Manual drag position always overrides auto-layout once set, at entity, orbit, or space level
 
-Phase 8 — Editing UI (partially done — add and rename UI exist; delete UI, move-entity UI, and field/tags/notes/metadata editing UI are all unbuilt, though delete/move already exist as tested store actions)
+Phase 8 — Editing UI (partially done — add and rename UI exist; delete UI, move-entity UI, and tags/notes/metadata editing UI are all unbuilt, though delete/move already exist as tested store actions)
 
-Add/edit/delete projects, spaces, orbits, entities, fields, relationships, notes/metadata, tags
+Add/edit/delete projects, spaces, orbits, entities, relationships, notes/metadata, tags
 Move entity between spaces/orbits (re-parenting, re-basing position to the new local origin) — relationships persist automatically per the data model rule
 Delete space/orbit — cascade confirmation UI, since this is destructive and touches relationships
 

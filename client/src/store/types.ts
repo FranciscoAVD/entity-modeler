@@ -42,20 +42,15 @@ export interface Orbit {
   metadata?: Record<string, string | number>;
 }
 
-export interface Field {
-  id: string;
-  name: string;
-  type: string;
-}
-
 export interface Entity {
   id: string;
   spaceId: string;
   orbitId?: string;
   name: string;
-  fields: Field[];
+  tags: string[];
   position: Vector3;
   notes: Note[];
+  metadata?: Record<string, string | number>;
 }
 
 export type Cardinality = "1:1" | "1:N" | "N:M";

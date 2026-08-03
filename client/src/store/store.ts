@@ -3,7 +3,6 @@ import { spacesInProject } from "./selectors";
 import type {
   Cardinality,
   Entity,
-  Field,
   Note,
   NoteTargetType,
   Orbit,
@@ -50,8 +49,9 @@ export interface ModelActions {
     spaceId: string;
     orbitId?: string;
     name: string;
-    fields?: Field[];
+    tags?: string[];
     position?: Vector3;
+    metadata?: Record<string, string | number>;
   }): string;
   addRelationship(input: { sourceId: string; targetId: string; cardinality: Cardinality }): string;
 
@@ -158,7 +158,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     return id;
   },
 
-  addEntity({ spaceId, orbitId, name, fields, position }) {
+  addEntity({ spaceId, orbitId, name, tags, position, metadata }) {
     const state = get();
     if (!state.spaces.has(spaceId)) throw new Error(`Space not found: ${spaceId}`);
     if (orbitId !== undefined) {
@@ -176,9 +176,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       spaceId,
       orbitId,
       name,
-      fields: fields ?? [],
+      tags: tags ?? [],
       position: position ?? ORIGIN,
       notes: [],
+      metadata,
     });
     set({ entities });
     return id;

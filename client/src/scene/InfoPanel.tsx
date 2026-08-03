@@ -1,8 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import { useModelStore } from "@/store/store";
-import type { Field, Note } from "@/store/types";
+import type { Note } from "@/store/types";
 
-// Shared across every level (entity fields, orbit tags, note metadata) per plan.md decision #6:
+// Shared across every level (space/orbit/entity metadata, note metadata) per plan.md decision #6:
 // "Same shape, same rendering path at every level."
 export function MetadataTable({ metadata }: { metadata: Record<string, string | number> }) {
   const entries = Object.entries(metadata);
@@ -43,38 +43,9 @@ export function NoteList({ notes }: { notes: Note[] }) {
   );
 }
 
-export function FieldsTable({ fields }: { fields: Field[] }) {
-  if (fields.length === 0) return null;
-
-  return (
-    <table className="w-full text-sm">
-      <tbody>
-        {fields.map((field) => (
-          <tr key={field.id}>
-            <td className="py-0.5 pr-2 font-mono">{field.name}</td>
-            <td className="text-muted-foreground py-0.5">{field.type}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-function EntityDetails({ entityId }: { entityId: string }) {
-  const entity = useModelStore((state) => state.entities.get(entityId));
-  if (!entity) return null;
-
-  return (
-    <div className="space-y-3">
-      <h3 className="font-semibold">{entity.name}</h3>
-      <FieldsTable fields={entity.fields} />
-      <NoteList notes={entity.notes} />
-    </div>
-  );
-}
-
-// Space and Orbit share the same displayable shape (label/name, tags, metadata, notes), so
-// orbit and space tabs both render through this rather than duplicating the same JSX per type.
+// Space, Orbit, and Entity all share the same displayable shape (name, optional label, tags,
+// metadata, notes) — Entity has no label of its own, so it just falls back to name — so all
+// three tabs render through this rather than duplicating the same JSX per type.
 function GroupDetails({
   name,
   label,
@@ -104,6 +75,13 @@ function GroupDetails({
       <NoteList notes={notes} />
     </div>
   );
+}
+
+function EntityDetails({ entityId }: { entityId: string }) {
+  const entity = useModelStore((state) => state.entities.get(entityId));
+  if (!entity) return null;
+
+  return <GroupDetails {...entity} />;
 }
 
 function OrbitDetails({ orbitId }: { orbitId: string }) {

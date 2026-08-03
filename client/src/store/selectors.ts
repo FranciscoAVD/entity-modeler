@@ -93,7 +93,7 @@ export interface SearchResult {
 }
 
 type SearchableState = Pick<ModelState, "projects" | "spaces" | "orbits" | "entities">;
-type TaggableState = Pick<ModelState, "spaces" | "orbits">;
+type TaggableState = Pick<ModelState, "spaces" | "orbits" | "entities">;
 
 // Relationships have no `name` field in the data model, so they're excluded from title search.
 export function searchByTitle(state: SearchableState, query: string): SearchResult[] {
@@ -116,8 +116,8 @@ export function searchByTitle(state: SearchableState, query: string): SearchResu
   return results;
 }
 
-// Tags are a space/orbit-only concept; recomputed on demand rather than incrementally maintained.
-// Keyed lowercase so lookup is case-insensitive, matching searchByTitle's behavior.
+// Recomputed on demand rather than incrementally maintained. Keyed lowercase so lookup is
+// case-insensitive, matching searchByTitle's behavior.
 export function buildTagIndex(state: TaggableState): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   const addAll = (items: Iterable<{ id: string; tags: string[] }>) => {
@@ -131,6 +131,7 @@ export function buildTagIndex(state: TaggableState): Map<string, Set<string>> {
   };
   addAll(state.spaces.values());
   addAll(state.orbits.values());
+  addAll(state.entities.values());
   return index;
 }
 
@@ -155,7 +156,12 @@ export function searchAll(state: SearchableState, query: string): SearchResult[]
       continue;
     }
     const orbit = state.orbits.get(id);
-    if (orbit) results.push({ id, type: "orbit", name: orbit.name });
+    if (orbit) {
+      results.push({ id, type: "orbit", name: orbit.name });
+      continue;
+    }
+    const entity = state.entities.get(id);
+    if (entity) results.push({ id, type: "entity", name: entity.name });
   }
   return results;
 }
