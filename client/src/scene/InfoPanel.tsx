@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { useModelStore } from "@/store/store";
-import type { Note } from "@/store/types";
+import type { Field, Note } from "@/store/types";
 
 // Shared across every level (entity fields, orbit tags, note metadata) per plan.md decision #6:
 // "Same shape, same rendering path at every level."
@@ -43,6 +43,37 @@ export function NoteList({ notes }: { notes: Note[] }) {
   );
 }
 
+export function FieldsTable({ fields }: { fields: Field[] }) {
+  if (fields.length === 0) return null;
+
+  return (
+    <table className="w-full text-sm">
+      <tbody>
+        {fields.map((field) => (
+          <tr key={field.id}>
+            <td className="py-0.5 pr-2 font-mono">{field.name}</td>
+            <td className="text-muted-foreground py-0.5 pr-2">{field.type}</td>
+            <td className="py-0.5">
+              <div className="flex gap-1">
+                {field.isPK && (
+                  <Badge variant="outline" className="text-[10px]">
+                    PK
+                  </Badge>
+                )}
+                {field.isFK && (
+                  <Badge variant="outline" className="text-[10px]">
+                    FK
+                  </Badge>
+                )}
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function EntityDetails({ entityId }: { entityId: string }) {
   const entity = useModelStore((state) => state.entities.get(entityId));
   if (!entity) return null;
@@ -50,32 +81,7 @@ function EntityDetails({ entityId }: { entityId: string }) {
   return (
     <div className="space-y-3">
       <h3 className="font-semibold">{entity.name}</h3>
-      {entity.fields.length > 0 && (
-        <table className="w-full text-sm">
-          <tbody>
-            {entity.fields.map((field) => (
-              <tr key={field.id}>
-                <td className="py-0.5 pr-2 font-mono">{field.name}</td>
-                <td className="text-muted-foreground py-0.5 pr-2">{field.type}</td>
-                <td className="py-0.5">
-                  <div className="flex gap-1">
-                    {field.isPK && (
-                      <Badge variant="outline" className="text-[10px]">
-                        PK
-                      </Badge>
-                    )}
-                    {field.isFK && (
-                      <Badge variant="outline" className="text-[10px]">
-                        FK
-                      </Badge>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <FieldsTable fields={entity.fields} />
       <NoteList notes={entity.notes} />
     </div>
   );

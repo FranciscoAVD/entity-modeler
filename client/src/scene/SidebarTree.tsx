@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ArrowRightLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -31,26 +31,38 @@ import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
 
 interface RenameTarget {
-  type: "space" | "orbit";
+  type: "space" | "orbit" | "entity";
   id: string;
   name: string;
 }
+
+const RENAME_TITLES: Record<RenameTarget["type"], string> = {
+  space: "Rename space",
+  orbit: "Rename orbit",
+  entity: "Rename node",
+};
 
 interface TreeProps {
   onRequestCreate: (request: PendingCreate) => void;
   onRequestRename: (target: RenameTarget) => void;
   onRequestViewNotes: (target: NonNullable<NotesTarget>) => void;
+  onRequestAddRelationship: (sourceId: string) => void;
 }
 
 export function SidebarTree({
   projectId,
   onRequestCreate,
-}: { onRequestCreate: (request: PendingCreate) => void } & { projectId: string }) {
+  onRequestAddRelationship,
+}: {
+  onRequestCreate: (request: PendingCreate) => void;
+  onRequestAddRelationship: (sourceId: string) => void;
+} & { projectId: string }) {
   const spaces = useModelStore(
     useShallow((state) => spacesInProject(state, projectId)),
   );
   const renameSpace = useModelStore((state) => state.renameSpace);
   const renameOrbit = useModelStore((state) => state.renameOrbit);
+  const renameEntity = useModelStore((state) => state.renameEntity);
 
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [notesTarget, setNotesTarget] = useState<NotesTarget>(null);
@@ -58,7 +70,8 @@ export function SidebarTree({
   const handleRename = (name: string) => {
     if (!renameTarget) return;
     if (renameTarget.type === "space") renameSpace(renameTarget.id, name);
-    else renameOrbit(renameTarget.id, name);
+    else if (renameTarget.type === "orbit") renameOrbit(renameTarget.id, name);
+    else renameEntity(renameTarget.id, name);
   };
 
   return (
@@ -71,6 +84,7 @@ export function SidebarTree({
             onRequestCreate={onRequestCreate}
             onRequestRename={setRenameTarget}
             onRequestViewNotes={setNotesTarget}
+            onRequestAddRelationship={onRequestAddRelationship}
           />
           {idx !== spaces.length - 1 && (
             <div className="my-4 mx-auto w-[calc(100%-1rem)] h-0.5 bg-border/50" />
@@ -82,7 +96,7 @@ export function SidebarTree({
         onOpenChange={(open) => {
           if (!open) setRenameTarget(null);
         }}
-        title={renameTarget?.type === "space" ? "Rename space" : "Rename orbit"}
+        title={renameTarget ? RENAME_TITLES[renameTarget.type] : ""}
         initialValue={renameTarget?.name}
         submitLabel="Rename"
         onSubmit={handleRename}
@@ -97,22 +111,23 @@ export function SidebarTree({
   );
 }
 
-// Wraps a row so right-clicking it opens the shared space/orbit context menu (rename, view
-// notes, visibility, plus any type-specific "Add ..." items). ContextMenuTrigger's `asChild`
-// makes the row div itself the trigger, so Content — despite rendering through a Portal — stays
-// a React-tree sibling of the row rather than a descendant of it; selecting an item there never
-// bubbles into the row's own onClick, unlike the old options-button dropdown which sat nested
-// inside the row's onClick div and needed an explicit stopPropagation guard.
+// Wraps a row so right-clicking it opens the shared context menu (rename, view notes,
+// visibility where applicable, plus any type-specific "Add ..." items). ContextMenuTrigger's
+// `asChild` makes the row div itself the trigger, so Content — despite rendering through a
+// Portal — stays a React-tree sibling of the row rather than a descendant of it; selecting an
+// item there never bubbles into the row's own onClick, unlike the old options-button dropdown
+// which sat nested inside the row's onClick div and needed an explicit stopPropagation guard.
+//
+// `visibility` is omitted for entity rows — visibility is inherited from the parent space/orbit
+// rather than toggled independently, so there's no per-entity "Visible" checkbox to show.
 function RowContextMenu({
-  visible,
-  onToggleVisible,
+  visibility,
   onRename,
   onViewNotes,
   extraItems,
   children,
 }: {
-  visible: boolean;
-  onToggleVisible: () => void;
+  visibility?: { visible: boolean; onToggleVisible: () => void };
   onRename: () => void;
   onViewNotes: () => void;
   extraItems?: React.ReactNode;
@@ -124,10 +139,17 @@ function RowContextMenu({
       <ContextMenuContent>
         <ContextMenuItem onSelect={onRename}>Rename</ContextMenuItem>
         <ContextMenuItem onSelect={onViewNotes}>View notes</ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuCheckboxItem checked={visible} onCheckedChange={onToggleVisible}>
-          Visible
-        </ContextMenuCheckboxItem>
+        {visibility && (
+          <>
+            <ContextMenuSeparator />
+            <ContextMenuCheckboxItem
+              checked={visibility.visible}
+              onCheckedChange={visibility.onToggleVisible}
+            >
+              Visible
+            </ContextMenuCheckboxItem>
+          </>
+        )}
         {extraItems && (
           <>
             <ContextMenuSeparator />
@@ -202,6 +224,7 @@ function SpaceRow({
   onRequestCreate,
   onRequestRename,
   onRequestViewNotes,
+  onRequestAddRelationship,
 }: TreeProps & { space: Space }) {
   const orbits = useModelStore(
     useShallow((state) => orbitsInSpace(state, space.id)),
@@ -228,8 +251,7 @@ function SpaceRow({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <RowContextMenu
-        visible={!hidden}
-        onToggleVisible={() => toggleSpaceVisibility(space.id)}
+        visibility={{ visible: !hidden, onToggleVisible: () => toggleSpaceVisibility(space.id) }}
         onRename={() => onRequestRename({ type: "space", id: space.id, name: space.name })}
         onViewNotes={() => onRequestViewNotes({ type: "space", id: space.id })}
         extraItems={
@@ -275,10 +297,17 @@ function SpaceRow({
               onRequestCreate={onRequestCreate}
               onRequestRename={onRequestRename}
               onRequestViewNotes={onRequestViewNotes}
+              onRequestAddRelationship={onRequestAddRelationship}
             />
           ))}
           {nodes.map((entity) => (
-            <EntityRow key={entity.id} entity={entity} />
+            <EntityRow
+              key={entity.id}
+              entity={entity}
+              onRequestRename={onRequestRename}
+              onRequestViewNotes={onRequestViewNotes}
+              onRequestAddRelationship={onRequestAddRelationship}
+            />
           ))}
         </ul>
       </CollapsibleContent>
@@ -291,6 +320,7 @@ function OrbitRow({
   onRequestCreate,
   onRequestRename,
   onRequestViewNotes,
+  onRequestAddRelationship,
 }: TreeProps & { orbit: Orbit }) {
   const nodes = useModelStore(
     useShallow((state) => entitiesInOrbit(state, orbit.id)),
@@ -313,8 +343,7 @@ function OrbitRow({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <RowContextMenu
-        visible={!hidden}
-        onToggleVisible={() => toggleOrbitVisibility(orbit.id)}
+        visibility={{ visible: !hidden, onToggleVisible: () => toggleOrbitVisibility(orbit.id) }}
         onRename={() => onRequestRename({ type: "orbit", id: orbit.id, name: orbit.name })}
         onViewNotes={() => onRequestViewNotes({ type: "orbit", id: orbit.id })}
         extraItems={
@@ -350,7 +379,13 @@ function OrbitRow({
       <CollapsibleContent className={CHILD_CONTENT_CLASS}>
         <ul className={CHILD_LIST_CLASS} style={DASHED_LINE_STYLE}>
           {nodes.map((entity) => (
-            <EntityRow key={entity.id} entity={entity} />
+            <EntityRow
+              key={entity.id}
+              entity={entity}
+              onRequestRename={onRequestRename}
+              onRequestViewNotes={onRequestViewNotes}
+              onRequestAddRelationship={onRequestAddRelationship}
+            />
           ))}
         </ul>
       </CollapsibleContent>
@@ -358,7 +393,14 @@ function OrbitRow({
   );
 }
 
-function EntityRow({ entity }: { entity: Entity }) {
+function EntityRow({
+  entity,
+  onRequestRename,
+  onRequestViewNotes,
+  onRequestAddRelationship,
+}: Pick<TreeProps, "onRequestRename" | "onRequestViewNotes" | "onRequestAddRelationship"> & {
+  entity: Entity;
+}) {
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const focusOn = useViewStore((state) => state.focusOn);
@@ -374,16 +416,27 @@ function EntityRow({ entity }: { entity: Entity }) {
     (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId));
 
   return (
-    <div
-      className={cn(
-        "text-muted-foreground flex items-center gap-2 rounded py-1",
-        !hidden && "cursor-pointer hover:bg-accent/10",
-        isFocused && "bg-accent/10",
-      )}
-      onClick={hidden ? undefined : () => focusOn(entity.id, "entity")}
+    <RowContextMenu
+      onRename={() => onRequestRename({ type: "entity", id: entity.id, name: entity.name })}
+      onViewNotes={() => onRequestViewNotes({ type: "entity", id: entity.id })}
+      extraItems={
+        <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
+          <ArrowRightLeft className="mr-1.5" />
+          Add relationship
+        </ContextMenuItem>
+      }
     >
-      <EntityIcon className="shrink-0" />
-      <span className="min-w-0 flex-1 truncate">{entity.name}</span>
-    </div>
+      <div
+        className={cn(
+          "text-muted-foreground flex items-center gap-2 rounded py-1",
+          !hidden && "cursor-pointer hover:bg-accent/10",
+          isFocused && "bg-accent/10",
+        )}
+        onClick={hidden ? undefined : () => focusOn(entity.id, "entity")}
+      >
+        <EntityIcon className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{entity.name}</span>
+      </div>
+    </RowContextMenu>
   );
 }

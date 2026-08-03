@@ -70,6 +70,16 @@ export function Sidebar({
 
   const [pending, setPending] = useState<PendingCreate | null>(null);
   const [relationshipDialogOpen, setRelationshipDialogOpen] = useState(false);
+  const [relationshipSourceId, setRelationshipSourceId] = useState<string | undefined>(
+    undefined,
+  );
+
+  // Triggered by an entity row's context menu ("Add relationship"), pre-filling the dialog's
+  // source entity.
+  const openRelationshipDialog = (sourceId: string) => {
+    setRelationshipSourceId(sourceId);
+    setRelationshipDialogOpen(true);
+  };
 
   const handleCreate = (name: string) => {
     if (!pending) return;
@@ -111,14 +121,6 @@ export function Sidebar({
           </h2>
           <SidebarSearch />
         </div>
-
-        <div>
-          <SectionHeader
-            label="Relationships"
-            menuLabel="Add relationship"
-            onAction={() => setRelationshipDialogOpen(true)}
-          />
-        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-4 pb-3">
@@ -127,7 +129,11 @@ export function Sidebar({
           menuLabel="Add space"
           onAction={() => setPending({ type: "space" })}
         />
-        <SidebarTree projectId={projectId} onRequestCreate={setPending} />
+        <SidebarTree
+          projectId={projectId}
+          onRequestCreate={setPending}
+          onRequestAddRelationship={openRelationshipDialog}
+        />
       </div>
 
       <CreateDialog
@@ -145,6 +151,7 @@ export function Sidebar({
         open={relationshipDialogOpen}
         onOpenChange={setRelationshipDialogOpen}
         projectId={projectId}
+        initialSourceId={relationshipSourceId}
       />
     </div>
   );
