@@ -32,12 +32,12 @@ Node and edge info: title always visible; full details click-to-reveal
 11. Search: tagged keywords + universal title search
 
 Spaces and orbits can carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod" or "external-facing")
-All objects (spaces, orbits, entities, relationships) are searchable by title/name via a simpler substring/fuzzy match, without needing explicit tagging
-Tags are a space/orbit-only concept (grouping-level metadata), while title search is universal across every object type
+Projects, spaces, orbits, and entities are searchable by title/name via a simpler substring/fuzzy match, without needing explicit tagging — relationships are excluded since they have no name field
+Tags are a space/orbit-only concept (grouping-level metadata), while title search is universal across every nameable object type
 
 12. Multi-selection via tabs
 
-Selecting a node/edge/orbit opens a tab (rather than replacing the current selection), so multiple objects can be inspected side by side
+A single click on a node/edge/orbit/space only moves the camera (focus-only, same as a sidebar row click); a double-click opens a tab (rather than replacing the current selection), so multiple objects can be inspected side by side — spaces were originally excluded from tabs entirely (see below), but now participate identically to orbits/entities
 Clicking a tab flies the camera to that object — animated (tweened, ease-in-out, ~400–800ms), never an instant snap, to preserve spatial orientation
 Closing a tab clears that object's selection state; if it was active, the next open tab (or none) becomes active
 A "reset view" control exists independent of tabs, returning to a full-project overview, so users aren't trapped at node-level zoom after opening several tabs
@@ -110,17 +110,17 @@ Selection, tabs & search architecture
 
 Selection model
 
-openTabs: { id, type: "entity" | "relationship" | "orbit" }[]
+openTabs: { id, type: "entity" | "relationship" | "orbit" | "space" }[]
 activeTabId: string | null
-Clicking a node/edge/orbit adds a tab (if not already open) and makes it active
+A single click on a node/edge/orbit/space in the 3D scene only moves the camera (via the same focusOn/focusTarget mechanism a sidebar row click uses) — it does not add a tab. Double-clicking adds a tab (if not already open) and makes it active
 Making a tab active triggers an animated camera fly-to centered on that object
 Closing a tab removes it from openTabs and clears its selection highlight; if it was active, the next tab (or none) becomes active
 A separate "reset view" action clears camera focus and flies to a default overview position, without necessarily closing tabs
 
 Search
 
-Text input matches against: space/orbit tags (exact/keyword index) and all object name fields (fuzzy/substring)
-Selecting a search result behaves like a click: opens a tab, flies camera to it
+Text input matches against: space/orbit tags (exact/keyword index) and all nameable object name fields (fuzzy/substring)
+Selecting a search result flies the camera to it, same as a single click on a sidebar row or 3D-scene object — it does not open a tab (opening a tab requires a double-click in the 3D scene, or the sidebar row's "View notes" context-menu item)
 Tag index is a simple inverted index (tag -> [space/orbit ids]), rebuilt or incrementally updated on tag edits
 Rendering: visibility by tier
 Object	Always visible	Revealed on click	Empty-state treatment
@@ -135,27 +135,27 @@ Hit detection (raycasting)
 Nodes: raycast against sphere meshes, keyed via userData.entityId
 Edges: raycast against invisible "hit tube" meshes (cylinder/tube geometry) running alongside each visible curved line — gives a generous, consistent click target regardless of visual line thickness
 Orbits: raycast against a light bounding volume (shell/disc) for orbit-level notes/metadata reveal
-Spaces: not part of the reveal flow (info is always-on), but still selectable for drag/move purposes
+Spaces: raycast against the same kind of light bounding volume as orbits — spaces are now fully part of the reveal/tab flow (this reverses an earlier decision to exclude them; see the closing note below). Drag/move repositioning is unimplemented for every object type so far, not just spaces (tracked under Phase 5)
 
 Flow
 
-Click → raycast → resolve { id, type } → open/focus tab → look up record → emit select event
+Click → raycast → resolve { id, type } → focus camera only (single click) or open/focus tab (double-click) → look up record → emit select event
 DOM tab bar + panel: tab bar lists open selections (title + type icon), panel below shows the active tab's full info (title, fields for entities, cardinality for relationships, notes as prose, metadata as key-value table)
-In-scene highlight (outline shader, emissive pulse) on whichever object the active tab represents
-Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position
+In-scene highlight on whichever object the active tab represents — currently a static emissive/opacity bump (entity emissive color, edge width/opacity, space/orbit boundary opacity via an `active` prop), not yet an outline shader or an animated pulse
+Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position — not implemented yet
 
-Space labels render as a persistent, lower-emphasis billboarded label rather than going through the select/reveal flow — always visible, not gated behind a click. Project-level notes are surfaced via a persistent "project info" panel/button rather than a 3D click target, since there's no single geometry representing "the whole project."
+Space labels remain a persistent, lower-emphasis billboarded label regardless of click state — always visible, never gated behind a click. This originally meant spaces skipped the select/reveal flow entirely; that part is now reversed (see the hit-detection note above) — the space's boundary is a click target too: a single click flies the camera to it, a double-click opens a tab whose panel shows the space's tags/metadata/notes, same as an orbit. Project-level notes have no UI at all yet — Project.notes exists in the data model and is never rendered anywhere; the originally-planned persistent "project info" panel/button (since there's no single geometry representing "the whole project") hasn't been built.
 
 Phase plan
 
-Phase 0 — Scope & spike
+Phase 0 — Scope & spike (done)
 
 1 space with 2 orbits (a few nodes each) plus one ungrouped node, one intra-orbit edge, one cross-orbit edge, one relationship that survives a manual "move entity to another space" test
 Empty-state test: one deliberately empty orbit, rendered per the tinted/dashed treatment
 Tab bar with 2+ open tabs, clicking between them triggers animated camera fly-to
 Validates label-tier visual hierarchy, orbit hit-testing, relationship persistence through entity moves, empty-group rendering, and tab/camera UX — before deeper investment
 
-Phase 1 — Core data model
+Phase 1 — Core data model (done — the project switcher is a dropdown rather than a dedicated list/grid page, functionally equivalent to what's described below)
 
 Project/Space/Orbit/Entity/Field/Relationship/Note as above, with tags on Space/Orbit
 Normalized store: flat Map<id, T> per type, parent references point up (Space.projectId, Entity.spaceId/orbitId), no nested child arrays
@@ -167,61 +167,61 @@ Position resolution helper (getWorldPosition(entity)) walking up via orbitId/spa
 Tag index and title index for search
 Project list/switcher: load Project records independently of their spaces/orbits/entities, which are fetched lazily by projectId once a project is opened
 
-Phase 2 — Space & orbit rendering
+Phase 2 — Space & orbit rendering (done)
 
 Tinted, transparent, color-coded bounding volumes for spaces and orbits, visually distinguishable by nesting level
 Empty-state treatment (dashed boundary, min size, always-visible label)
 origin transforms applied correctly through the space → orbit → entity chain
 Per-space and per-orbit visibility toggles
 
-Phase 3 — Node rendering
+Phase 3 — Node rendering (partially done — instancing not started, explicitly deferred to Phase 10 in code)
 
 Sphere geometry per entity, billboarded title at computed offset (radial, camera-facing, clipping-safe)
 Instancing strategy for larger schemas
 
-Phase 4 — Edge rendering + hit tubes
+Phase 4 — Edge rendering + hit tubes (done)
 
 Visible curved (Bezier) line + paired invisible hit-tube mesh per relationship
 Billboarded title at curve midpoint, offset perpendicular to the curve
 Distinct styling for same-orbit / cross-orbit / cross-space edges
 Cardinality markers (billboarded) at endpoints
 
-Phase 5 — Camera & interaction
+Phase 5 — Camera & interaction (partially done — drag-to-reposition not implemented; updateEntityPosition exists in the store but has no UI trigger)
 
 OrbitControls for orbit/pan/zoom
 Unified raycasting across spheres + hit-tubes + orbit bounds → tab-open dispatch
 Animated camera fly-to on tab activation; independent "reset view" control
 Camera-plane-constrained dragging for repositioning entities (modifier key for depth movement)
 
-Phase 6 — Tabs, notes & search UI
+Phase 6 — Tabs, notes & search UI (partially done — tab bar, generic info panel, and search input all exist; add/edit/delete note UI does not, addNote in the store has no UI caller)
 
-Tab bar (open/close/switch), info panel generic across entity/relationship/orbit
-Space info stays a separate always-on label (not this panel)
-Search input (tags + titles), results open tabs like clicks do
+Tab bar (open/close/switch), info panel generic across entity/relationship/orbit/space
+Space info now goes through this same panel (SpaceDetails) rather than staying a separate always-on label-only affordance — this reverses the line's original assumption, see the reveal-flow note above
+Search input (tags + titles); results fly the camera like a sidebar-row click, not a full tab-open — see the Search section above
 If authoring tool: add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level
 
-Phase 7 — 3D auto-layout
+Phase 7 — 3D auto-layout (not started — no layout algorithm exists; bounds.ts is a static count-based sizing heuristic, not a layout)
 
 Force-directed layout within each orbit first, then orbits arranged within their parent space, then spaces arranged within the project — a layout hierarchy mirroring the data hierarchy
 Shell/sphere constraint option at each tier to keep things navigable
 Manual drag position always overrides auto-layout once set, at entity, orbit, or space level
 
-Phase 8 — Editing UI
+Phase 8 — Editing UI (partially done — add and rename UI exist; delete UI, move-entity UI, and field/tags/notes/metadata editing UI are all unbuilt, though delete/move already exist as tested store actions)
 
 Add/edit/delete projects, spaces, orbits, entities, fields, relationships, notes/metadata, tags
 Move entity between spaces/orbits (re-parenting, re-basing position to the new local origin) — relationships persist automatically per the data model rule
 Delete space/orbit — cascade confirmation UI, since this is destructive and touches relationships
 
-Phase 9 — Persistence & export
+Phase 9 — Persistence & export (not started)
 
 JSON serialize/deserialize including all note levels, metadata, and tags
 Export: since 3D doesn't screenshot cleanly, include a "flatten to top-down orthographic" mode for PNG/PDF snapshots, selectable at project, space, or orbit scope
 
-Phase 10 — Performance polish
+Phase 10 — Performance polish (not started)
 
 LOD for text/geometry at distance, frustum culling, instancing for repeated geometry, worker-based layout computation for large graphs, visibility culling of hidden spaces/orbits
 
-Phase 11 — Packaging & API
+Phase 11 — Packaging & API (not started — the app is a single React app wired directly to the Zustand store, no embeddable library/class wrapper exists)
 
 Public API (new ERModeler(container, options), .addProject(), .addSpace(), space.addOrbit(), space.addEntity() / orbit.addEntity(), .on('select', ...), .search(query), etc.) — note the API shape itself enforces the "nodes must belong to a space" rule
 Framework wrapper (React) if needed, docs, example schemas (e.g. a "company network" space with "DMZ" and "internal" orbits, plus a "cloud services" space)
@@ -229,10 +229,14 @@ Single-user assumption documented as a current constraint (not designed for conc
 
 Build order: 0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11 — spaces/orbits come right after the data model since nodes are meaningless without a parent coordinate frame; camera/interaction comes before edges to get things visible and clickable early; everything else follows dependency order.
 
+Not on this list but built along the way: a right-click context menu on sidebar space/orbit/entity rows (rename, view notes, visibility toggle, "Add orbit"/"Add node"/"Add relationship" as applicable), plus the sidebar tree itself (collapsible space → orbit → entity list, click-to-focus, search). It's a Phase 8-ish "add/rename" UI and a Phase 6-ish "notes" affordance built ad hoc alongside the Phase 2/3 rendering work, rather than in the build-order sequence above.
+
 Open questions / things to revisit later
 Multi-select bulk operations (bulk-move, bulk-delete, bulk-tag) beyond the tab pattern
 Long-title truncation/wrapping rules for billboarded labels
-Formal color/material scheme per nesting level (beyond "tinted, color-coded")
+Formal color/material scheme per nesting level (beyond "tinted, color-coded") — currently just hardcoded per-type color constants, not a documented/formalized scheme
 Undo/redo implementation depth (history stack vs. relying solely on the reactive store)
-Testing strategy for raycasting/hit-detection and layout correctness (visual regression, scripted-camera screenshots)
+Testing strategy for raycasting/hit-detection and layout correctness (visual regression, scripted-camera screenshots) — the pure-logic helpers underneath (edge geometry/visibility, bounds, camera-focus resolution, store validation) are unit-tested; actual react-three-fiber pointer/raycast events and any layout algorithm are not, since no layout algorithm exists yet
 Revisit collaboration/concurrent editing if multi-user need arises later
+Search currently matches across every project's data (searchAll operates on the whole flat store, not filtered by the active projectId), even though the search box is nested under one project's sidebar — should search be scoped to the active project, or is cross-project jump-to-result intentional?
+Delete and move-entity UI: both actions are fully implemented and tested in the store (deleteProject/deleteSpace/deleteOrbit/deleteEntity/deleteRelationship, moveEntity) but have no UI trigger anywhere yet — no delete confirmation, no "move to..." action
