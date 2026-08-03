@@ -87,26 +87,51 @@ function EntityDetails({ entityId }: { entityId: string }) {
   );
 }
 
-function OrbitDetails({ orbitId }: { orbitId: string }) {
-  const orbit = useModelStore((state) => state.orbits.get(orbitId));
-  if (!orbit) return null;
-
+// Space and Orbit share the same displayable shape (label/name, tags, metadata, notes), so
+// orbit and space tabs both render through this rather than duplicating the same JSX per type.
+function GroupDetails({
+  name,
+  label,
+  tags,
+  metadata,
+  notes,
+}: {
+  name: string;
+  label?: string;
+  tags: string[];
+  metadata?: Record<string, string | number>;
+  notes: Note[];
+}) {
   return (
     <div className="space-y-3">
-      <h3 className="font-semibold">{orbit.label ?? orbit.name}</h3>
-      {orbit.tags.length > 0 && (
+      <h3 className="font-semibold">{label ?? name}</h3>
+      {tags.length > 0 && (
         <div className="flex flex-wrap gap-1">
-          {orbit.tags.map((tag) => (
+          {tags.map((tag) => (
             <Badge key={tag} variant="secondary">
               {tag}
             </Badge>
           ))}
         </div>
       )}
-      {orbit.metadata && <MetadataTable metadata={orbit.metadata} />}
-      <NoteList notes={orbit.notes} />
+      {metadata && <MetadataTable metadata={metadata} />}
+      <NoteList notes={notes} />
     </div>
   );
+}
+
+function OrbitDetails({ orbitId }: { orbitId: string }) {
+  const orbit = useModelStore((state) => state.orbits.get(orbitId));
+  if (!orbit) return null;
+
+  return <GroupDetails {...orbit} />;
+}
+
+function SpaceDetails({ spaceId }: { spaceId: string }) {
+  const space = useModelStore((state) => state.spaces.get(spaceId));
+  if (!space) return null;
+
+  return <GroupDetails {...space} />;
 }
 
 function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
@@ -140,6 +165,7 @@ export function InfoPanel() {
     <div className="flex-1 overflow-y-auto p-3">
       {activeTab.type === "entity" && <EntityDetails entityId={activeTab.id} />}
       {activeTab.type === "orbit" && <OrbitDetails orbitId={activeTab.id} />}
+      {activeTab.type === "space" && <SpaceDetails spaceId={activeTab.id} />}
       {activeTab.type === "relationship" && <RelationshipDetails relationshipId={activeTab.id} />}
     </div>
   );

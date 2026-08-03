@@ -170,6 +170,11 @@ export function tabLabel(state: ModelState, tab: Tab): string {
     return orbit?.label ?? orbit?.name ?? "Unknown orbit";
   }
 
+  if (tab.type === "space") {
+    const space = state.spaces.get(tab.id);
+    return space?.label ?? space?.name ?? "Unknown space";
+  }
+
   const relationship = state.relationships.get(tab.id);
   if (!relationship) return "Unknown relationship";
   const source = state.entities.get(relationship.sourceId)?.name ?? "?";

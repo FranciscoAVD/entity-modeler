@@ -25,7 +25,6 @@ import {
 import { useModelStore } from "@/store/store";
 import type { Entity, Orbit, Space } from "@/store/types";
 import { CreateDialog } from "./CreateDialog";
-import { NotesDialog, type NotesTarget } from "./NotesDialog";
 import type { PendingCreate } from "./Sidebar";
 import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
@@ -45,7 +44,6 @@ const RENAME_TITLES: Record<RenameTarget["type"], string> = {
 interface TreeProps {
   onRequestCreate: (request: PendingCreate) => void;
   onRequestRename: (target: RenameTarget) => void;
-  onRequestViewNotes: (target: NonNullable<NotesTarget>) => void;
   onRequestAddRelationship: (sourceId: string) => void;
 }
 
@@ -65,7 +63,6 @@ export function SidebarTree({
   const renameEntity = useModelStore((state) => state.renameEntity);
 
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
-  const [notesTarget, setNotesTarget] = useState<NotesTarget>(null);
 
   const handleRename = (name: string) => {
     if (!renameTarget) return;
@@ -83,7 +80,6 @@ export function SidebarTree({
             space={space}
             onRequestCreate={onRequestCreate}
             onRequestRename={setRenameTarget}
-            onRequestViewNotes={setNotesTarget}
             onRequestAddRelationship={onRequestAddRelationship}
           />
           {idx !== spaces.length - 1 && (
@@ -100,12 +96,6 @@ export function SidebarTree({
         initialValue={renameTarget?.name}
         submitLabel="Rename"
         onSubmit={handleRename}
-      />
-      <NotesDialog
-        target={notesTarget}
-        onOpenChange={(open) => {
-          if (!open) setNotesTarget(null);
-        }}
       />
     </div>
   );
@@ -223,7 +213,6 @@ function SpaceRow({
   space,
   onRequestCreate,
   onRequestRename,
-  onRequestViewNotes,
   onRequestAddRelationship,
 }: TreeProps & { space: Space }) {
   const orbits = useModelStore(
@@ -237,11 +226,14 @@ function SpaceRow({
     (state) => state.toggleSpaceVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
-  // Spaces are never opened as tabs (plan.md: "Spaces: not part of the reveal flow"), so
-  // focusTarget — set by this row's own click and by search — is the only "currently focused"
-  // signal that applies to them.
+  const openTab = useModelStore((state) => state.openTab);
+  // A plain row click only flies the camera (focusTarget), leaving tabs/panel untouched; "View
+  // notes" from the context menu opens the tab instead, so "currently focused" has to check both.
+  const activeTabId = useModelStore((state) => state.activeTabId);
   const focusTarget = useViewStore((state) => state.focusTarget);
-  const isFocused = focusTarget?.type === "space" && focusTarget.id === space.id;
+  const isFocused =
+    activeTabId === space.id ||
+    (focusTarget?.type === "space" && focusTarget.id === space.id);
   const [open, setOpen] = useState(true);
   const hasChildren = orbits.length > 0 || nodes.length > 0;
 
@@ -253,7 +245,7 @@ function SpaceRow({
       <RowContextMenu
         visibility={{ visible: !hidden, onToggleVisible: () => toggleSpaceVisibility(space.id) }}
         onRename={() => onRequestRename({ type: "space", id: space.id, name: space.name })}
-        onViewNotes={() => onRequestViewNotes({ type: "space", id: space.id })}
+        onViewNotes={() => openTab(space.id, "space")}
         extraItems={
           <>
             <ContextMenuItem
@@ -296,7 +288,6 @@ function SpaceRow({
               orbit={orbit}
               onRequestCreate={onRequestCreate}
               onRequestRename={onRequestRename}
-              onRequestViewNotes={onRequestViewNotes}
               onRequestAddRelationship={onRequestAddRelationship}
             />
           ))}
@@ -305,7 +296,6 @@ function SpaceRow({
               key={entity.id}
               entity={entity}
               onRequestRename={onRequestRename}
-              onRequestViewNotes={onRequestViewNotes}
               onRequestAddRelationship={onRequestAddRelationship}
             />
           ))}
@@ -319,7 +309,6 @@ function OrbitRow({
   orbit,
   onRequestCreate,
   onRequestRename,
-  onRequestViewNotes,
   onRequestAddRelationship,
 }: TreeProps & { orbit: Orbit }) {
   const nodes = useModelStore(
@@ -330,6 +319,7 @@ function OrbitRow({
     (state) => state.toggleOrbitVisibility,
   );
   const focusOn = useViewStore((state) => state.focusOn);
+  const openTab = useModelStore((state) => state.openTab);
   // "Currently focused" can come from either a direct scene click (sets activeTabId, opens a
   // tab) or a sidebar/search click (sets focusTarget only, no tab) — check both.
   const activeTabId = useModelStore((state) => state.activeTabId);
@@ -345,7 +335,7 @@ function OrbitRow({
       <RowContextMenu
         visibility={{ visible: !hidden, onToggleVisible: () => toggleOrbitVisibility(orbit.id) }}
         onRename={() => onRequestRename({ type: "orbit", id: orbit.id, name: orbit.name })}
-        onViewNotes={() => onRequestViewNotes({ type: "orbit", id: orbit.id })}
+        onViewNotes={() => openTab(orbit.id, "orbit")}
         extraItems={
           <ContextMenuItem
             onSelect={() =>
@@ -383,7 +373,6 @@ function OrbitRow({
               key={entity.id}
               entity={entity}
               onRequestRename={onRequestRename}
-              onRequestViewNotes={onRequestViewNotes}
               onRequestAddRelationship={onRequestAddRelationship}
             />
           ))}
@@ -396,14 +385,14 @@ function OrbitRow({
 function EntityRow({
   entity,
   onRequestRename,
-  onRequestViewNotes,
   onRequestAddRelationship,
-}: Pick<TreeProps, "onRequestRename" | "onRequestViewNotes" | "onRequestAddRelationship"> & {
+}: Pick<TreeProps, "onRequestRename" | "onRequestAddRelationship"> & {
   entity: Entity;
 }) {
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const focusOn = useViewStore((state) => state.focusOn);
+  const openTab = useModelStore((state) => state.openTab);
   // "Currently focused" can come from either a direct scene click (sets activeTabId, opens a
   // tab) or a sidebar/search click (sets focusTarget only, no tab) — check both.
   const activeTabId = useModelStore((state) => state.activeTabId);
@@ -418,7 +407,7 @@ function EntityRow({
   return (
     <RowContextMenu
       onRename={() => onRequestRename({ type: "entity", id: entity.id, name: entity.name })}
-      onViewNotes={() => onRequestViewNotes({ type: "entity", id: entity.id })}
+      onViewNotes={() => openTab(entity.id, "entity")}
       extraItems={
         <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
           <ArrowRightLeft className="mr-1.5" />

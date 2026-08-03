@@ -294,7 +294,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const relationships = new Map(state.relationships);
     for (const id of relationshipIds) relationships.delete(id);
 
-    const removedTabIds = new Set([...orbitIds, ...entityIds, ...relationshipIds]);
+    const removedTabIds = new Set([spaceId, ...orbitIds, ...entityIds, ...relationshipIds]);
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, removedTabIds);
 
     set({ spaces, orbits, entities, relationships, openTabs, activeTabId });

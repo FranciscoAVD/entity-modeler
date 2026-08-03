@@ -30,6 +30,16 @@ function defaultFocus(resetViewToken: number): CameraFocus {
   return { key: `reset:${resetViewToken}`, target: DEFAULT_FOCUS_TARGET, distance: DEFAULT_DISTANCE };
 }
 
+// Shared by the sidebar-driven explicit-focus branch and the space-tab branch below — both
+// need the identical key/target/distance once a space is confirmed to exist and be visible.
+function spaceFocus(state: ModelState, spaceId: string): CameraFocus {
+  return {
+    key: `space:${spaceId}`,
+    target: state.spaces.get(spaceId)!.origin,
+    distance: computeSpaceRadius(state, spaceId) * SPACE_FOCUS_RADIUS_FACTOR + SPACE_FOCUS_MARGIN,
+  };
+}
+
 // Resolves a sidebar-driven focus request (space/orbit/entity), independent of tabs. Reuses the
 // same key format as the tab-based branches below (`orbit:${id}`, `entity:${id}`) so refocusing
 // an object that's also the active tab is a no-op rather than a redundant re-tween. A hidden
@@ -42,12 +52,7 @@ function resolveExplicitFocus(
   hiddenOrbitIds: ReadonlySet<string>,
 ): CameraFocus | null {
   if (target.type === "space" && state.spaces.has(target.id) && isSpaceVisible(hiddenSpaceIds, target.id)) {
-    const space = state.spaces.get(target.id)!;
-    return {
-      key: `space:${target.id}`,
-      target: space.origin,
-      distance: computeSpaceRadius(state, target.id) * SPACE_FOCUS_RADIUS_FACTOR + SPACE_FOCUS_MARGIN,
-    };
+    return spaceFocus(state, target.id);
   }
 
   if (target.type === "orbit" && isOrbitVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)) {
@@ -112,6 +117,10 @@ export function resolveCameraFocus(
       target: getOrbitWorldOrigin(state, tab.id),
       distance: computeOrbitRadius(state, tab.id) * ORBIT_FOCUS_RADIUS_FACTOR + ORBIT_FOCUS_MARGIN,
     };
+  }
+
+  if (tab.type === "space" && state.spaces.has(tab.id) && isSpaceVisible(hiddenSpaceIds, tab.id)) {
+    return spaceFocus(state, tab.id);
   }
 
   if (tab.type === "relationship" && isRelationshipVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {

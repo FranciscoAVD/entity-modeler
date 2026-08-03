@@ -70,7 +70,7 @@ export interface Relationship {
   notes: Note[];
 }
 
-export type TabType = "entity" | "relationship" | "orbit";
+export type TabType = "entity" | "relationship" | "orbit" | "space";
 
 export interface Tab {
   id: string;
