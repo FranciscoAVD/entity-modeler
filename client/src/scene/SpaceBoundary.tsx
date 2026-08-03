@@ -1,3 +1,4 @@
+import type { ThreeEvent } from "@react-three/fiber";
 import { useShallow } from "zustand/react/shallow";
 import { orbitsInSpace, ungroupedEntitiesInSpace } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
@@ -18,13 +19,60 @@ export function SpaceBoundary({ space }: { space: Space }) {
   const radius = useModelStore((state) => computeSpaceRadius(state, space.id));
   const empty = useModelStore((state) => isSpaceEmpty(state, space.id));
   const hidden = useViewStore((state) => state.hiddenSpaceIds.has(space.id));
+  const isActive = useModelStore((state) => state.activeTabId === space.id);
+  const openTab = useModelStore((state) => state.openTab);
+  const focusOn = useViewStore((state) => state.focusOn);
 
   if (hidden) return null;
 
+  // A click aimed at an orbit (or an entity/edge nested inside one, or an ungrouped entity
+  // directly in this space) also intersects this space's own hit volume first, since it's the
+  // outermost sphere along the ray. Defer to whichever is more specific — same pattern
+  // OrbitBoundary uses to yield to the entities/edges nested inside it.
+  const hitMoreSpecific = (e: ThreeEvent<MouseEvent>) =>
+    e.intersections.some(
+      (i) =>
+        i.object.userData?.entityId ||
+        i.object.userData?.relationshipId ||
+        i.object.userData?.orbitId,
+    );
+
+  // Single click only moves the camera (same as a sidebar row click); the panel only opens on
+  // double-click, or via the sidebar's "View notes" context menu item.
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (hitMoreSpecific(e)) return;
+    e.stopPropagation();
+    focusOn(space.id, "space");
+  };
+
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (hitMoreSpecific(e)) return;
+    e.stopPropagation();
+    openTab(space.id, "space");
+  };
+
+  const handlePointerOver = (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation();
+    document.body.style.cursor = "pointer";
+  };
+
+  const handlePointerOut = () => {
+    document.body.style.cursor = "auto";
+  };
+
   return (
     <group position={[space.origin.x, space.origin.y, space.origin.z]}>
-      <BoundarySphere radius={radius} color={SPACE_COLOR} empty={empty} />
+      <BoundarySphere radius={radius} color={SPACE_COLOR} empty={empty} active={isActive} />
       <BoundaryLabel text={space.label ?? space.name} radius={radius} color={SPACE_COLOR} />
+      <mesh
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onPointerOver={handlePointerOver}
+        onPointerOut={handlePointerOut}
+      >
+        <sphereGeometry args={[radius, 16, 12]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
       {orbits.map((orbit) => (
         <OrbitBoundary key={orbit.id} orbit={orbit} />
       ))}

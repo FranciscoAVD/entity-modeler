@@ -37,6 +37,7 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
   const scope = useModelStore((state) => relationshipScope(state, relationship.id));
   const isActive = useModelStore((state) => state.activeTabId === relationship.id);
   const openTab = useModelStore((state) => state.openTab);
+  const focusOn = useViewStore((state) => state.focusOn);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
   const isVisible = useModelStore((state) =>
@@ -68,9 +69,19 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
 
   // An entity mesh is always more specific than the edge tube passing near/through it
   // (e.g. any same-orbit edge's endpoints sit right at its connected entities) — defer to it.
+  const hitEntity = (e: ThreeEvent<MouseEvent>) =>
+    e.intersections.some((i) => i.object.userData?.entityId);
+
+  // Single click only moves the camera (same as a sidebar row click); the panel only opens on
+  // double-click, or via the sidebar's "View notes" context menu item.
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    const hitEntity = e.intersections.some((i) => i.object.userData?.entityId);
-    if (hitEntity) return;
+    if (hitEntity(e)) return;
+    e.stopPropagation();
+    focusOn(relationship.id, "relationship");
+  };
+
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (hitEntity(e)) return;
     e.stopPropagation();
     openTab(relationship.id, "relationship");
   };
@@ -100,6 +111,7 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
         geometry={hitGeometry}
         userData={{ relationshipId: relationship.id }}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
       >

@@ -17,17 +17,26 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
   const hidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
   const isActive = useModelStore((state) => state.activeTabId === orbit.id);
   const openTab = useModelStore((state) => state.openTab);
+  const focusOn = useViewStore((state) => state.focusOn);
 
   if (hidden) return null;
 
   // A click aimed at an entity (or an edge between two of its entities) also intersects
   // this orbit's own hit volume first (it's nearer along the ray). Defer to whichever is
   // present — matches the plan's "raycast against sphere meshes, keyed via userData.entityId".
+  const hitMoreSpecific = (e: ThreeEvent<MouseEvent>) =>
+    e.intersections.some((i) => i.object.userData?.entityId || i.object.userData?.relationshipId);
+
+  // Single click only moves the camera (same as a sidebar row click); the panel only opens on
+  // double-click, or via the sidebar's "View notes" context menu item.
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    const hitMoreSpecific = e.intersections.some(
-      (i) => i.object.userData?.entityId || i.object.userData?.relationshipId,
-    );
-    if (hitMoreSpecific) return;
+    if (hitMoreSpecific(e)) return;
+    e.stopPropagation();
+    focusOn(orbit.id, "orbit");
+  };
+
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (hitMoreSpecific(e)) return;
     e.stopPropagation();
     openTab(orbit.id, "orbit");
   };
@@ -45,7 +54,13 @@ export function OrbitBoundary({ orbit }: { orbit: Orbit }) {
     <group position={[orbit.origin.x, orbit.origin.y, orbit.origin.z]}>
       <BoundarySphere radius={radius} color={ORBIT_COLOR} empty={empty} active={isActive} />
       <BoundaryLabel text={orbit.label ?? orbit.name} radius={radius} color={ORBIT_COLOR} dimmer />
-      <mesh onClick={handleClick} onPointerOver={handlePointerOver} onPointerOut={handlePointerOut}>
+      <mesh
+        userData={{ orbitId: orbit.id }}
+        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onPointerOver={handlePointerOver}
+        onPointerOut={handlePointerOut}
+      >
         <sphereGeometry args={[radius, 16, 12]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>

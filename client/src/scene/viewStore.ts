@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type FocusableType = "space" | "orbit" | "entity";
+export type FocusableType = "space" | "orbit" | "entity" | "relationship";
 
 export interface FocusTarget {
   id: string;
@@ -17,9 +17,11 @@ interface ViewState {
   // Incremented to request a camera fly-to-overview independent of tab state (plan.md's "reset view" control).
   resetViewToken: number;
   requestResetView(): void;
-  // Sidebar-driven camera focus, independent of tab/selection state — moves the camera without
-  // opening the details panel (unlike clicking an object in the 3D scene, which does both via
-  // openTab). focusToken lets CameraRig detect "just requested" even when re-focusing the same id.
+  // Camera focus independent of tab/selection state — moves the camera without opening the
+  // details panel. Driven by a single click on an object (in the 3D scene or the sidebar);
+  // opening the panel itself now requires a double-click (3D scene) or the "View notes" context
+  // menu item (sidebar) instead, both of which go through openTab. focusToken lets CameraRig
+  // detect "just requested" even when re-focusing the same id.
   focusTarget: FocusTarget | null;
   focusToken: number;
   focusOn(id: string, type: FocusableType): void;

@@ -30,8 +30,9 @@ function defaultFocus(resetViewToken: number): CameraFocus {
   return { key: `reset:${resetViewToken}`, target: DEFAULT_FOCUS_TARGET, distance: DEFAULT_DISTANCE };
 }
 
-// Shared by the sidebar-driven explicit-focus branch and the space-tab branch below — both
-// need the identical key/target/distance once a space is confirmed to exist and be visible.
+// Each of these is shared by the sidebar/scene-click explicit-focus branch and the matching
+// tab branch below — both need the identical key/target/distance once the object is confirmed
+// to exist and be visible.
 function spaceFocus(state: ModelState, spaceId: string): CameraFocus {
   return {
     key: `space:${spaceId}`,
@@ -40,11 +41,40 @@ function spaceFocus(state: ModelState, spaceId: string): CameraFocus {
   };
 }
 
-// Resolves a sidebar-driven focus request (space/orbit/entity), independent of tabs. Reuses the
-// same key format as the tab-based branches below (`orbit:${id}`, `entity:${id}`) so refocusing
-// an object that's also the active tab is a no-op rather than a redundant re-tween. A hidden
-// target resolves to null (falls through to the tab/default branches) — there's nothing
-// rendered to fly to, so focusing it would just point the camera at empty space.
+function orbitFocus(state: ModelState, orbitId: string): CameraFocus {
+  return {
+    key: `orbit:${orbitId}`,
+    target: getOrbitWorldOrigin(state, orbitId),
+    distance: computeOrbitRadius(state, orbitId) * ORBIT_FOCUS_RADIUS_FACTOR + ORBIT_FOCUS_MARGIN,
+  };
+}
+
+function entityFocus(state: ModelState, entityId: string): CameraFocus {
+  return {
+    key: `entity:${entityId}`,
+    target: getWorldPosition(state, entityId),
+    distance: ENTITY_FOCUS_DISTANCE,
+  };
+}
+
+function relationshipFocus(state: ModelState, relationshipId: string): CameraFocus {
+  const relationship = state.relationships.get(relationshipId)!;
+  const sourcePos = getWorldPosition(state, relationship.sourceId);
+  const targetPos = getWorldPosition(state, relationship.targetId);
+  const edgeLength = length(subtract(targetPos, sourcePos));
+  return {
+    key: `relationship:${relationshipId}`,
+    target: midpoint(sourcePos, targetPos),
+    distance: Math.max(RELATIONSHIP_FOCUS_MIN_DISTANCE, edgeLength * RELATIONSHIP_FOCUS_DISTANCE_FACTOR),
+  };
+}
+
+// Resolves an explicit focus request (space/orbit/entity/relationship) — from a sidebar row or
+// a single click on an object in the 3D scene — independent of tabs. Reuses the same key format
+// as the tab-based branches below so refocusing an object that's also the active tab is a no-op
+// rather than a redundant re-tween. A hidden target resolves to null (falls through to the
+// tab/default branches) — there's nothing rendered to fly to, so focusing it would just point
+// the camera at empty space.
 function resolveExplicitFocus(
   state: ModelState,
   target: FocusTarget,
@@ -56,19 +86,19 @@ function resolveExplicitFocus(
   }
 
   if (target.type === "orbit" && isOrbitVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return {
-      key: `orbit:${target.id}`,
-      target: getOrbitWorldOrigin(state, target.id),
-      distance: computeOrbitRadius(state, target.id) * ORBIT_FOCUS_RADIUS_FACTOR + ORBIT_FOCUS_MARGIN,
-    };
+    return orbitFocus(state, target.id);
   }
 
   if (target.type === "entity" && isEntityVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return {
-      key: `entity:${target.id}`,
-      target: getWorldPosition(state, target.id),
-      distance: ENTITY_FOCUS_DISTANCE,
-    };
+    return entityFocus(state, target.id);
+  }
+
+  if (
+    target.type === "relationship" &&
+    state.relationships.has(target.id) &&
+    isRelationshipVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)
+  ) {
+    return relationshipFocus(state, target.id);
   }
 
   return null;
@@ -104,19 +134,11 @@ export function resolveCameraFocus(
   if (!tab) return defaultFocus(resetViewToken);
 
   if (tab.type === "entity" && isEntityVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return {
-      key: `entity:${tab.id}`,
-      target: getWorldPosition(state, tab.id),
-      distance: ENTITY_FOCUS_DISTANCE,
-    };
+    return entityFocus(state, tab.id);
   }
 
   if (tab.type === "orbit" && isOrbitVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return {
-      key: `orbit:${tab.id}`,
-      target: getOrbitWorldOrigin(state, tab.id),
-      distance: computeOrbitRadius(state, tab.id) * ORBIT_FOCUS_RADIUS_FACTOR + ORBIT_FOCUS_MARGIN,
-    };
+    return orbitFocus(state, tab.id);
   }
 
   if (tab.type === "space" && state.spaces.has(tab.id) && isSpaceVisible(hiddenSpaceIds, tab.id)) {
@@ -124,15 +146,7 @@ export function resolveCameraFocus(
   }
 
   if (tab.type === "relationship" && isRelationshipVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    const relationship = state.relationships.get(tab.id)!;
-    const sourcePos = getWorldPosition(state, relationship.sourceId);
-    const targetPos = getWorldPosition(state, relationship.targetId);
-    const edgeLength = length(subtract(targetPos, sourcePos));
-    return {
-      key: `relationship:${tab.id}`,
-      target: midpoint(sourcePos, targetPos),
-      distance: Math.max(RELATIONSHIP_FOCUS_MIN_DISTANCE, edgeLength * RELATIONSHIP_FOCUS_DISTANCE_FACTOR),
-    };
+    return relationshipFocus(state, tab.id);
   }
 
   return defaultFocus(resetViewToken);

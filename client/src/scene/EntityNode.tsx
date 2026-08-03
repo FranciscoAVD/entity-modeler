@@ -3,6 +3,7 @@ import { useModelStore } from "@/store/store";
 import type { Entity } from "@/store/types";
 import { ENTITY_COLOR } from "./SidebarTypeIcons";
 import { RadialLabel } from "./RadialLabel";
+import { useViewStore } from "./viewStore";
 
 // Not GPU-instanced yet — fine at the node counts this tool targets (schemas/topologies,
 // not point clouds). Revisit with THREE.InstancedMesh under Phase 10 if profiling calls for it.
@@ -12,8 +13,16 @@ export const ENTITY_RADIUS = 0.6;
 export function EntityNode({ entity }: { entity: Entity }) {
   const isActive = useModelStore((state) => state.activeTabId === entity.id);
   const openTab = useModelStore((state) => state.openTab);
+  const focusOn = useViewStore((state) => state.focusOn);
 
+  // Single click only moves the camera (same as a sidebar row click); the panel only opens on
+  // double-click, or via the sidebar's "View notes" context menu item.
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    focusOn(entity.id, "entity");
+  };
+
+  const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();
     openTab(entity.id, "entity");
   };
@@ -32,6 +41,7 @@ export function EntityNode({ entity }: { entity: Entity }) {
       <mesh
         userData={{ entityId: entity.id }}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
       >
