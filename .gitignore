@@ -30,6 +30,3 @@ lerna-debug.log*
 *.sw?
 
 *.local
-
-# Local-only working notes
-progress.md
