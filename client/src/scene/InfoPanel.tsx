@@ -52,21 +52,7 @@ export function FieldsTable({ fields }: { fields: Field[] }) {
         {fields.map((field) => (
           <tr key={field.id}>
             <td className="py-0.5 pr-2 font-mono">{field.name}</td>
-            <td className="text-muted-foreground py-0.5 pr-2">{field.type}</td>
-            <td className="py-0.5">
-              <div className="flex gap-1">
-                {field.isPK && (
-                  <Badge variant="outline" className="text-[10px]">
-                    PK
-                  </Badge>
-                )}
-                {field.isFK && (
-                  <Badge variant="outline" className="text-[10px]">
-                    FK
-                  </Badge>
-                )}
-              </div>
-            </td>
+            <td className="text-muted-foreground py-0.5">{field.type}</td>
           </tr>
         ))}
       </tbody>

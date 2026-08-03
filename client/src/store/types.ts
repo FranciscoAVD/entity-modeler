@@ -46,8 +46,6 @@ export interface Field {
   id: string;
   name: string;
   type: string;
-  isPK?: boolean;
-  isFK?: boolean;
 }
 
 export interface Entity {

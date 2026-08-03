@@ -82,7 +82,7 @@ Entity {
 }
 
 Field {
-  id, name, type, isPK?, isFK?
+  id, name, type
 }
 
 Relationship {

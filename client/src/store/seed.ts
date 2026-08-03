@@ -23,7 +23,7 @@ export function seedDemoProject(): string {
     name: "Node 1",
     position: { x: 1, y: 0.5, z: 0 },
     fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid", isPK: true },
+      { id: crypto.randomUUID(), name: "id", type: "uuid" },
       { id: crypto.randomUUID(), name: "email", type: "string" },
     ],
   });
@@ -33,8 +33,8 @@ export function seedDemoProject(): string {
     name: "Node 2",
     position: { x: -1, y: -0.5, z: 0.5 },
     fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid", isPK: true },
-      { id: crypto.randomUUID(), name: "node1_id", type: "uuid", isFK: true },
+      { id: crypto.randomUUID(), name: "id", type: "uuid" },
+      { id: crypto.randomUUID(), name: "node1_id", type: "uuid" },
     ],
   });
 
@@ -44,7 +44,7 @@ export function seedDemoProject(): string {
     spaceId,
     name: "Ungrouped Node",
     position: { x: 0, y: 3, z: -1.5 },
-    fields: [{ id: crypto.randomUUID(), name: "id", type: "uuid", isPK: true }],
+    fields: [{ id: crypto.randomUUID(), name: "id", type: "uuid" }],
   });
 
   const spaceBeta = addSpace({
@@ -57,8 +57,8 @@ export function seedDemoProject(): string {
     spaceId: spaceBeta,
     name: "Remote Node",
     fields: [
-      { id: crypto.randomUUID(), name: "id", type: "uuid", isPK: true },
-      { id: crypto.randomUUID(), name: "ungrouped_node_id", type: "uuid", isFK: true },
+      { id: crypto.randomUUID(), name: "id", type: "uuid" },
+      { id: crypto.randomUUID(), name: "ungrouped_node_id", type: "uuid" },
     ],
   });
 
