@@ -4,7 +4,7 @@ import type { Note } from "@/store/types";
 
 // Shared across every level (entity fields, orbit tags, note metadata) per plan.md decision #6:
 // "Same shape, same rendering path at every level."
-function MetadataTable({ metadata }: { metadata: Record<string, string | number> }) {
+export function MetadataTable({ metadata }: { metadata: Record<string, string | number> }) {
   const entries = Object.entries(metadata);
   if (entries.length === 0) return null;
 
@@ -22,7 +22,7 @@ function MetadataTable({ metadata }: { metadata: Record<string, string | number>
   );
 }
 
-function NoteList({ notes }: { notes: Note[] }) {
+export function NoteList({ notes }: { notes: Note[] }) {
   if (notes.length === 0) return null;
 
   return (

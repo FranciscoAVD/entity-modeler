@@ -1,28 +1,39 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-// Generic "name + sensible defaults" creation dialog, shared by project/space/orbit/node —
-// relationships get their own dialog (AddRelationshipDialog) since they need two entity
-// references rather than just a name.
+// Generic "name + sensible defaults" dialog, shared by project/space/orbit/node creation and
+// by space/orbit rename — relationships get their own dialog (AddRelationshipDialog) since
+// they need two entity references rather than just a name.
 export function CreateDialog({
   open,
   onOpenChange,
   title,
   placeholder,
+  initialValue = "",
+  submitLabel = "Create",
   onSubmit,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
   placeholder?: string;
+  initialValue?: string;
+  submitLabel?: string;
   onSubmit: (name: string) => void;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initialValue);
+
+  // This dialog instance is reused across different targets (create vs. rename, or one
+  // rename after another) without unmounting, so `value` needs to be re-synced to whichever
+  // initialValue the caller passes whenever the dialog opens — a plain useState initializer
+  // only runs once, on mount.
+  useEffect(() => {
+    if (open) setValue(initialValue);
+  }, [open, initialValue]);
 
   const close = (next: boolean) => {
-    setValue("");
     onOpenChange(next);
   };
 
@@ -53,7 +64,7 @@ export function CreateDialog({
             Cancel
           </Button>
           <Button onClick={submit} disabled={!value.trim()}>
-            Create
+            {submitLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

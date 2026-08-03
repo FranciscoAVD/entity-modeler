@@ -57,6 +57,8 @@ export interface ModelActions {
 
   moveEntity(entityId: string, target: { spaceId: string; orbitId?: string }): void;
   updateEntityPosition(entityId: string, position: Vector3): void;
+  renameSpace(spaceId: string, name: string): void;
+  renameOrbit(orbitId: string, name: string): void;
 
   deleteProject(projectId: string): void;
   deleteSpace(spaceId: string): void;
@@ -218,6 +220,26 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const entities = new Map(state.entities);
     entities.set(entityId, { ...entity, position });
     set({ entities });
+  },
+
+  renameSpace(spaceId, name) {
+    const state = get();
+    const space = state.spaces.get(spaceId);
+    if (!space) throw new Error(`Space not found: ${spaceId}`);
+
+    const spaces = new Map(state.spaces);
+    spaces.set(spaceId, { ...space, name });
+    set({ spaces });
+  },
+
+  renameOrbit(orbitId, name) {
+    const state = get();
+    const orbit = state.orbits.get(orbitId);
+    if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
+
+    const orbits = new Map(state.orbits);
+    orbits.set(orbitId, { ...orbit, name });
+    set({ orbits });
   },
 
   deleteProject(projectId) {
