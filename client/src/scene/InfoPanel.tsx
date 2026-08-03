@@ -14,7 +14,7 @@ export function MetadataTable({ metadata }: { metadata: Record<string, string | 
         {entries.map(([key, value]) => (
           <tr key={key}>
             <td className="text-muted-foreground py-0.5 pr-3 font-mono">{key}</td>
-            <td className="py-0.5">{value}</td>
+            <td className="py-0.5 break-words">{value}</td>
           </tr>
         ))}
       </tbody>
@@ -29,8 +29,14 @@ export function NoteList({ notes }: { notes: Note[] }) {
     <div className="space-y-2">
       <h4 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Notes</h4>
       {notes.map((note) => (
-        <div key={note.id} className="border-border rounded-md border p-2 text-sm">
-          <p className="whitespace-pre-wrap">{note.text}</p>
+        <div key={note.id} className="py-2 text-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="min-w-0 truncate font-medium text-primary">{note.title}</p>
+            <p className="text-muted-foreground shrink-0 text-xs">
+              {new Date(note.createdAt).toLocaleDateString()}
+            </p>
+          </div>
+          <p className="mt-1 text-justify whitespace-pre-wrap break-words">{note.text}</p>
           {note.author && <p className="text-muted-foreground mt-1 text-xs">— {note.author}</p>}
           {note.metadata && (
             <div className="mt-1.5">

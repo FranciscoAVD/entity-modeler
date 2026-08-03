@@ -7,6 +7,7 @@ export interface Vector3 {
 
 export interface Note {
   id: string;
+  title: string;
   text: string;
   author?: string;
   createdAt: number;

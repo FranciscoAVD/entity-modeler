@@ -70,7 +70,7 @@ export interface ModelActions {
   addNote(
     targetType: NoteTargetType,
     targetId: string,
-    note: { text: string; author?: string; metadata?: Record<string, string | number> },
+    note: { title: string; text: string; author?: string; metadata?: Record<string, string | number> },
   ): string;
 
   openTab(id: string, type: TabType): void;
@@ -366,7 +366,14 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   addNote(targetType, targetId, note) {
     const state = get();
     const id = crypto.randomUUID();
-    const fullNote: Note = { id, text: note.text, author: note.author, createdAt: Date.now(), metadata: note.metadata };
+    const fullNote: Note = {
+      id,
+      title: note.title,
+      text: note.text,
+      author: note.author,
+      createdAt: Date.now(),
+      metadata: note.metadata,
+    };
 
     switch (targetType) {
       case "project": {

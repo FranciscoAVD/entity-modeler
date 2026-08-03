@@ -90,7 +90,7 @@ Relationship {
 }
 
 Note {
-  id, text, author?, createdAt,
+  id, title, text, author?, createdAt,
   metadata?: Record<string, string | number>
 }
 
