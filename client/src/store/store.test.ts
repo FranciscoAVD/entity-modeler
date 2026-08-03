@@ -173,40 +173,18 @@ describe("tabs", () => {
     openTab("a", "entity");
 
     const state = useModelStore.getState();
-    expect(state.openTabs.map((t) => t.id)).toEqual(["a", "b"]);
+    // Re-opening "a" moves it to the most-recent position rather than leaving it in place.
+    expect(state.openTabs.map((t) => t.id)).toEqual(["b", "a"]);
     expect(state.activeTabId).toBe("a");
   });
 
-  it("closing the active tab activates the next remaining tab", () => {
-    const { openTab, closeTab } = useModelStore.getState();
-    openTab("a", "entity");
-    openTab("b", "entity");
-    openTab("c", "entity");
-    useModelStore.setState({ activeTabId: "b" });
+  it("keeps only the 5 most recently viewed tabs, evicting the oldest", () => {
+    const { openTab } = useModelStore.getState();
+    for (const id of ["a", "b", "c", "d", "e", "f"]) openTab(id, "entity");
 
-    closeTab("b");
-
-    expect(useModelStore.getState().activeTabId).toBe("c");
-  });
-
-  it("closing the last active tab falls back to the previous one", () => {
-    const { openTab, closeTab } = useModelStore.getState();
-    openTab("a", "entity");
-    openTab("b", "entity");
-    useModelStore.setState({ activeTabId: "b" });
-
-    closeTab("b");
-
-    expect(useModelStore.getState().activeTabId).toBe("a");
-  });
-
-  it("closing the only tab leaves none active", () => {
-    const { openTab, closeTab } = useModelStore.getState();
-    openTab("a", "entity");
-    closeTab("a");
-
-    expect(useModelStore.getState().activeTabId).toBeNull();
-    expect(useModelStore.getState().openTabs).toEqual([]);
+    const state = useModelStore.getState();
+    expect(state.openTabs.map((t) => t.id)).toEqual(["b", "c", "d", "e", "f"]);
+    expect(state.activeTabId).toBe("f");
   });
 
   it("cascading deletes prune tabs for removed entities and relationships", () => {

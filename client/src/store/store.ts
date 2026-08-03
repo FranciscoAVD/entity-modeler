@@ -74,12 +74,16 @@ export interface ModelActions {
   ): string;
 
   openTab(id: string, type: TabType): void;
-  closeTab(id: string): void;
   setActiveTab(id: string): void;
 }
 
-// Closing a tab (singly or via cascade delete) hands the active slot to the next
-// remaining tab after it, falling back to the previous one, per plan.md's tab rules.
+// Recently-viewed history is capped rather than a user-managed open/close list — the sidebar's
+// tab picker just shows "last N viewed", so the oldest entry quietly falls off instead of
+// requiring an explicit close action.
+const MAX_RECENT_TABS = 5;
+
+// Removing entries (only ever via cascade delete now, since there's no manual close) hands the
+// active slot to the next remaining tab after it, falling back to the previous one.
 function pruneTabs(
   openTabs: Tab[],
   activeTabId: string | null,
@@ -411,15 +415,13 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
   openTab(id, type) {
     const state = get();
-    const exists = state.openTabs.some((t) => t.id === id);
-    const openTabs = exists ? state.openTabs : [...state.openTabs, { id, type }];
+    // Move-to-most-recent: drop any existing entry for this id, then append it, so the list
+    // stays ordered oldest-to-newest and re-viewing something already in the list doesn't
+    // grow it. Capping at MAX_RECENT_TABS evicts the oldest once a 6th distinct id is viewed.
+    const openTabs = [...state.openTabs.filter((t) => t.id !== id), { id, type }].slice(
+      -MAX_RECENT_TABS,
+    );
     set({ openTabs, activeTabId: id });
-  },
-
-  closeTab(id) {
-    const state = get();
-    const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, new Set([id]));
-    set({ openTabs, activeTabId });
   },
 
   setActiveTab(id) {
