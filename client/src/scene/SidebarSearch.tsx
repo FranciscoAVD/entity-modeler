@@ -11,7 +11,7 @@ import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { TYPE_ICONS } from "./typeIcons";
 import { EntityIcon, ENTITY_COLOR, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
-import { isEntityVisible, isOrbitVisible } from "./visibility";
+import { isEntityVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
 import { useViewStore } from "./viewStore";
 
 const RESULT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
@@ -31,12 +31,12 @@ function ResultIcon({ type }: { type: SearchResult["type"] }) {
   }
 }
 
-// Only entity/orbit results are focusable (projects have no scene geometry to fly to, and
-// spaces aren't part of the tab-based reveal flow — plan.md: "Spaces: not part of the reveal
-// flow" — though they're still focusable from the sidebar tree via focusOn), so they're shown
-// but not selectable here.
-function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" {
-  return type === "entity" || type === "orbit";
+// Projects have no scene geometry to fly to, so they're shown but not selectable here.
+// Spaces/orbits/entities all resolve to a focusOn-able target — spaces aren't part of the
+// tab-based reveal flow (plan.md: "Spaces: not part of the reveal flow"), but they're still
+// focusable via the sidebar tree's focusOn, same as here.
+function isSelectable(type: SearchResult["type"]): type is "entity" | "orbit" | "space" {
+  return type === "entity" || type === "orbit" || type === "space";
 }
 
 function resultKey(result: SearchResult) {
@@ -72,9 +72,11 @@ export function SidebarSearch() {
     if (!result || !isSelectable(result.type)) return;
     const modelState = useModelStore.getState();
     const visible =
-      result.type === "orbit"
-        ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
-        : isEntityVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
+      result.type === "space"
+        ? isSpaceVisible(hiddenSpaceIds, result.id)
+        : result.type === "orbit"
+          ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
+          : isEntityVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
     if (visible) focusOn(result.id, result.type);
     setQuery("");
   };
@@ -96,7 +98,7 @@ export function SidebarSearch() {
       openOnInputClick={false}
     >
       <ComboboxInput
-        placeholder="Search entities, orbits, tags…"
+        placeholder="Search entities, orbits, spaces, tags…"
         showTrigger={false}
       />
       <ComboboxContent>
