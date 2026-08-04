@@ -19,7 +19,7 @@ Node and edge info: title always visible; full details click-to-reveal
 
 5. Data model is separate from the renderer Project/Space/Orbit/Entity/Relationship/Note live in a plain data structure; the three.js scene is one view over that data. This gives undo/redo, JSON export, and alternate render targets (e.g. flattened 2D export) without touching core logic.
 
-6. Notes: freeform + optional structured metadata, at five levels Project, Space, Orbit, Entity, and Relationship all carry independent notes[]. Each note is primarily free text, with an optional metadata bag for structured cases (e.g. an edge representing a subnet: { cidr: "10.0.4.0/24", vlan: 12 }), rendered as a small key-value table alongside the prose. Same shape, same rendering path at every level.
+6. Notes: freeform + optional structured metadata, at four levels Space, Orbit, Entity, and Relationship all carry independent notes[] — this originally included Project too, but notes (and tags/metadata generally) are exclusively a Space/Orbit/Entity(/Relationship, for notes only) concept, so Project never gets one. Each note is primarily free text, with an optional metadata bag for structured cases (e.g. an edge representing a subnet: { cidr: "10.0.4.0/24", vlan: 12 }), rendered as a small key-value table alongside the prose — this bag is read-only in the UI (set via seed data only), separate from the object-level tags/metadata editing described in decision #11 and Phase 8. Same shape, same rendering path at every level.
 
 7. Relationships can cross spaces and orbits, and survive entity moves sourceId/targetId reference entities globally by id. If an entity moves to a different space or orbit, its relationships are never severed or auto-deleted — they simply re-render with updated styling (e.g. an edge that was intra-space may become cross-space after a move). Relationship lifetime is tied only to its own existence, not to its endpoints' current location.
 
@@ -56,8 +56,7 @@ Optional "+" affordance inside the boundary if used as an authoring tool
 
 Data model
 Project {
-  id, name, description?,
-  notes: Note[]
+  id, name, description?
 }
 
 Space {
@@ -95,6 +94,8 @@ Note {
 }
 
 Entity originally had a fields: Field[] property (Field being { id, name, type, isPK?, isFK? }) modeling database-table columns. That's been removed: a field with no value is a schema declaration, not an attribute of a specific entity instance, which is a narrower assumption (this tool models general entities/relationships, not specifically database schemas — see plan.md's own network-topology example schema under Phase 11) than this tool intends. Entity now carries tags/metadata directly instead, same shape as Space/Orbit.
+
+Project originally had a notes: Note[] property too. That's been removed — notes (and tags/metadata generally) are exclusively a Space/Orbit/Entity(/Relationship, for notes only) concept; Project never gets an editing surface for any of them.
 
 Store shape: flat maps per type — projects, spaces, orbits, entities, relationships — each keyed by id. "Children of X" views (e.g. spacesInProject(projectId), entitiesInSpace(spaceId), entitiesInOrbit(orbitId)) are derived by filtering/indexing these maps on demand, optionally backed by a maintained parentId -> Set<childId> index for performance, rather than being a second source of truth to keep in sync.
 
@@ -144,7 +145,7 @@ DOM tab bar + panel: the tab bar is a single dropdown (recently-viewed history, 
 In-scene highlight on whichever object the active tab represents — currently a static emissive/opacity bump (entity emissive color, edge width/opacity, space/orbit boundary opacity via an `active` prop), not yet an outline shader or an animated pulse
 Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position — not implemented yet
 
-Space labels remain a persistent, lower-emphasis billboarded label regardless of click state — always visible, never gated behind a click. This originally meant spaces skipped the select/reveal flow entirely; that part is now reversed (see the hit-detection note above) — the space's boundary is a click target too: a single click flies the camera to it, a double-click opens a tab whose panel shows the space's tags/metadata/notes, same as an orbit. Project-level notes have no UI at all yet — Project.notes exists in the data model and is never rendered anywhere; the originally-planned persistent "project info" panel/button (since there's no single geometry representing "the whole project") hasn't been built.
+Space labels remain a persistent, lower-emphasis billboarded label regardless of click state — always visible, never gated behind a click. This originally meant spaces skipped the select/reveal flow entirely; that part is now reversed (see the hit-detection note above) — the space's boundary is a click target too: a single click flies the camera to it, a double-click opens a tab whose panel shows the space's tags/metadata/notes, same as an orbit. Project never gets this treatment — Project.notes has been removed from the data model entirely (see the data model section above), so there's no "project info" panel/button to build, planned or otherwise.
 
 Phase plan
 
@@ -206,7 +207,7 @@ Force-directed layout within each orbit first, then orbits arranged within their
 Shell/sphere constraint option at each tier to keep things navigable
 Manual drag position always overrides auto-layout once set, at entity, orbit, or space level
 
-Phase 8 — Editing UI (partially done — add and rename UI exist; delete UI, move-entity UI, and tags/notes/metadata editing UI are all unbuilt, though delete/move already exist as tested store actions)
+Phase 8 — Editing UI (mostly done — add, rename, delete-with-cascade-confirmation, move-entity, and notes/tags/metadata editing UI all exist; entity/space/orbit repositioning is the remaining piece, deliberately deferred)
 
 Add/edit/delete projects, spaces, orbits, entities, relationships, notes/metadata, tags
 Move entity between spaces/orbits (re-parenting, re-basing position to the new local origin) — relationships persist automatically per the data model rule
@@ -239,4 +240,3 @@ Undo/redo implementation depth (history stack vs. relying solely on the reactive
 Testing strategy for raycasting/hit-detection and layout correctness (visual regression, scripted-camera screenshots) — the pure-logic helpers underneath (edge geometry/visibility, bounds, camera-focus resolution, store validation) are unit-tested; actual react-three-fiber pointer/raycast events and any layout algorithm are not, since no layout algorithm exists yet
 Revisit collaboration/concurrent editing if multi-user need arises later
 Search currently matches across every project's data (searchAll operates on the whole flat store, not filtered by the active projectId), even though the search box is nested under one project's sidebar — should search be scoped to the active project, or is cross-project jump-to-result intentional?
-Delete and move-entity UI: both actions are fully implemented and tested in the store (deleteProject/deleteSpace/deleteOrbit/deleteEntity/deleteRelationship, moveEntity) but have no UI trigger anywhere yet — no delete confirmation, no "move to..." action

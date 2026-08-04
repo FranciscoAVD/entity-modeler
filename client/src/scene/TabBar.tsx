@@ -28,6 +28,8 @@ function TabOption({ tab }: { tab: Tab }) {
 // objects open at once. openTabs is now a recency-capped history (store.ts's openTab keeps
 // only the 5 most recently viewed) rather than a user-managed open/close list, so a single
 // Select — newest first — replaces the chip row entirely; there's nothing left to "close".
+// Lives in the Header now (alongside the project switcher), not the docked side panel — it's a
+// navigation control, not part of the details being viewed.
 export function TabBar() {
   const openTabs = useModelStore((state) => state.openTabs);
   const activeTabId = useModelStore((state) => state.activeTabId);
@@ -36,17 +38,15 @@ export function TabBar() {
   if (openTabs.length === 0) return null;
 
   return (
-    <div className="border-border border-b p-2">
-      <Select value={activeTabId ?? undefined} onValueChange={setActiveTab}>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Recently viewed" />
-        </SelectTrigger>
-        <SelectContent>
-          {[...openTabs].reverse().map((tab) => (
-            <TabOption key={tab.id} tab={tab} />
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Select value={activeTabId ?? undefined} onValueChange={setActiveTab}>
+      <SelectTrigger className="w-56">
+        <SelectValue placeholder="Recently viewed" />
+      </SelectTrigger>
+      <SelectContent>
+        {[...openTabs].reverse().map((tab) => (
+          <TabOption key={tab.id} tab={tab} />
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

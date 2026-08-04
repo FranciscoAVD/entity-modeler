@@ -1,4 +1,4 @@
-import { ArrowRightLeft, ChevronRight } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, Move, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -18,13 +18,16 @@ import {
 import { cn } from "@/lib/utils";
 import {
   entitiesInOrbit,
+  entityDeleteImpact,
   orbitsInSpace,
+  spaceDeleteImpact,
   spacesInProject,
   ungroupedEntitiesInSpace,
 } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Entity, Orbit, Space } from "@/store/types";
 import { CreateDialog } from "./CreateDialog";
+import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import type { PendingCreate } from "./Sidebar";
 import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
@@ -41,19 +44,34 @@ const RENAME_TITLES: Record<RenameTarget["type"], string> = {
   entity: "Rename node",
 };
 
+type DeleteTarget = RenameTarget;
+
+const DELETE_TITLES: Record<DeleteTarget["type"], string> = {
+  space: "Delete space",
+  orbit: "Delete orbit",
+  entity: "Delete node",
+};
+
+const plural = (n: number, singular: string, pluralForm = `${singular}s`) =>
+  `${n} ${n === 1 ? singular : pluralForm}`;
+
 interface TreeProps {
   onRequestCreate: (request: PendingCreate) => void;
   onRequestRename: (target: RenameTarget) => void;
+  onRequestDelete: (target: DeleteTarget) => void;
   onRequestAddRelationship: (sourceId: string) => void;
+  onRequestMove: (entityId: string) => void;
 }
 
 export function SidebarTree({
   projectId,
   onRequestCreate,
   onRequestAddRelationship,
+  onRequestMove,
 }: {
   onRequestCreate: (request: PendingCreate) => void;
   onRequestAddRelationship: (sourceId: string) => void;
+  onRequestMove: (entityId: string) => void;
 } & { projectId: string }) {
   const spaces = useModelStore(
     useShallow((state) => spacesInProject(state, projectId)),
@@ -61,14 +79,38 @@ export function SidebarTree({
   const renameSpace = useModelStore((state) => state.renameSpace);
   const renameOrbit = useModelStore((state) => state.renameOrbit);
   const renameEntity = useModelStore((state) => state.renameEntity);
+  const deleteSpace = useModelStore((state) => state.deleteSpace);
+  const deleteOrbit = useModelStore((state) => state.deleteOrbit);
+  const deleteEntity = useModelStore((state) => state.deleteEntity);
 
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const deleteDescription = useModelStore((state) => {
+    if (!deleteTarget) return null;
+    if (deleteTarget.type === "space") {
+      const impact = spaceDeleteImpact(state, deleteTarget.id);
+      return `This will also delete ${plural(impact.orbits, "orbit")}, ${plural(impact.entities, "entity", "entities")}, and ${plural(impact.relationships, "relationship")}.`;
+    }
+    if (deleteTarget.type === "orbit") {
+      const count = entitiesInOrbit(state, deleteTarget.id).length;
+      return `${plural(count, "entity", "entities")} will be ungrouped, not deleted.`;
+    }
+    const impact = entityDeleteImpact(state, deleteTarget.id);
+    return `This will also delete ${plural(impact.relationships, "relationship")}.`;
+  });
 
   const handleRename = (name: string) => {
     if (!renameTarget) return;
     if (renameTarget.type === "space") renameSpace(renameTarget.id, name);
     else if (renameTarget.type === "orbit") renameOrbit(renameTarget.id, name);
     else renameEntity(renameTarget.id, name);
+  };
+
+  const handleDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteTarget.type === "space") deleteSpace(deleteTarget.id);
+    else if (deleteTarget.type === "orbit") deleteOrbit(deleteTarget.id);
+    else deleteEntity(deleteTarget.id);
   };
 
   return (
@@ -80,7 +122,9 @@ export function SidebarTree({
             space={space}
             onRequestCreate={onRequestCreate}
             onRequestRename={setRenameTarget}
+            onRequestDelete={setDeleteTarget}
             onRequestAddRelationship={onRequestAddRelationship}
+            onRequestMove={onRequestMove}
           />
           {idx !== spaces.length - 1 && (
             <div className="my-4 mx-auto w-[calc(100%-1rem)] h-0.5 bg-border/50" />
@@ -96,6 +140,15 @@ export function SidebarTree({
         initialValue={renameTarget?.name}
         submitLabel="Rename"
         onSubmit={handleRename}
+      />
+      <DeleteConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+        title={deleteTarget ? `${DELETE_TITLES[deleteTarget.type]} "${deleteTarget.name}"?` : ""}
+        description={deleteDescription}
+        onConfirm={handleDelete}
       />
     </div>
   );
@@ -114,12 +167,14 @@ function RowContextMenu({
   visibility,
   onRename,
   onViewNotes,
+  onDelete,
   extraItems,
   children,
 }: {
   visibility?: { visible: boolean; onToggleVisible: () => void };
   onRename: () => void;
   onViewNotes: () => void;
+  onDelete: () => void;
   extraItems?: React.ReactNode;
   children: React.ReactElement;
 }) {
@@ -146,6 +201,11 @@ function RowContextMenu({
             {extraItems}
           </>
         )}
+        <ContextMenuSeparator />
+        <ContextMenuItem variant="destructive" onSelect={onDelete}>
+          <Trash2 className="mr-1.5" />
+          Delete
+        </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );
@@ -213,7 +273,9 @@ function SpaceRow({
   space,
   onRequestCreate,
   onRequestRename,
+  onRequestDelete,
   onRequestAddRelationship,
+  onRequestMove,
 }: TreeProps & { space: Space }) {
   const orbits = useModelStore(
     useShallow((state) => orbitsInSpace(state, space.id)),
@@ -246,6 +308,7 @@ function SpaceRow({
         visibility={{ visible: !hidden, onToggleVisible: () => toggleSpaceVisibility(space.id) }}
         onRename={() => onRequestRename({ type: "space", id: space.id, name: space.name })}
         onViewNotes={() => openTab(space.id, "space")}
+        onDelete={() => onRequestDelete({ type: "space", id: space.id, name: space.name })}
         extraItems={
           <>
             <ContextMenuItem
@@ -288,7 +351,9 @@ function SpaceRow({
               orbit={orbit}
               onRequestCreate={onRequestCreate}
               onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
               onRequestAddRelationship={onRequestAddRelationship}
+              onRequestMove={onRequestMove}
             />
           ))}
           {nodes.map((entity) => (
@@ -296,7 +361,9 @@ function SpaceRow({
               key={entity.id}
               entity={entity}
               onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
               onRequestAddRelationship={onRequestAddRelationship}
+              onRequestMove={onRequestMove}
             />
           ))}
         </ul>
@@ -309,7 +376,9 @@ function OrbitRow({
   orbit,
   onRequestCreate,
   onRequestRename,
+  onRequestDelete,
   onRequestAddRelationship,
+  onRequestMove,
 }: TreeProps & { orbit: Orbit }) {
   const nodes = useModelStore(
     useShallow((state) => entitiesInOrbit(state, orbit.id)),
@@ -336,6 +405,7 @@ function OrbitRow({
         visibility={{ visible: !hidden, onToggleVisible: () => toggleOrbitVisibility(orbit.id) }}
         onRename={() => onRequestRename({ type: "orbit", id: orbit.id, name: orbit.name })}
         onViewNotes={() => openTab(orbit.id, "orbit")}
+        onDelete={() => onRequestDelete({ type: "orbit", id: orbit.id, name: orbit.name })}
         extraItems={
           <ContextMenuItem
             onSelect={() =>
@@ -373,7 +443,9 @@ function OrbitRow({
               key={entity.id}
               entity={entity}
               onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
               onRequestAddRelationship={onRequestAddRelationship}
+              onRequestMove={onRequestMove}
             />
           ))}
         </ul>
@@ -385,8 +457,13 @@ function OrbitRow({
 function EntityRow({
   entity,
   onRequestRename,
+  onRequestDelete,
   onRequestAddRelationship,
-}: Pick<TreeProps, "onRequestRename" | "onRequestAddRelationship"> & {
+  onRequestMove,
+}: Pick<
+  TreeProps,
+  "onRequestRename" | "onRequestDelete" | "onRequestAddRelationship" | "onRequestMove"
+> & {
   entity: Entity;
 }) {
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
@@ -408,11 +485,18 @@ function EntityRow({
     <RowContextMenu
       onRename={() => onRequestRename({ type: "entity", id: entity.id, name: entity.name })}
       onViewNotes={() => openTab(entity.id, "entity")}
+      onDelete={() => onRequestDelete({ type: "entity", id: entity.id, name: entity.name })}
       extraItems={
-        <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
-          <ArrowRightLeft className="mr-1.5" />
-          Add relationship
-        </ContextMenuItem>
+        <>
+          <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
+            <ArrowRightLeft className="mr-1.5" />
+            Add relationship
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={() => onRequestMove(entity.id)}>
+            <Move className="mr-1.5" />
+            Move to...
+          </ContextMenuItem>
+        </>
       }
     >
       <div

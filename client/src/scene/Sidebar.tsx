@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { AddRelationshipDialog } from "./AddRelationshipDialog";
 import { CreateDialog } from "./CreateDialog";
+import { MoveEntityDialog } from "./MoveEntityDialog";
 import { SidebarSearch } from "./SidebarSearch";
 import { SidebarTree } from "./SidebarTree";
 
@@ -73,6 +74,7 @@ export function Sidebar({
   const [relationshipSourceId, setRelationshipSourceId] = useState<string | undefined>(
     undefined,
   );
+  const [moveEntityId, setMoveEntityId] = useState<string | null>(null);
 
   // Triggered by an entity row's context menu ("Add relationship"), pre-filling the dialog's
   // source entity.
@@ -133,6 +135,7 @@ export function Sidebar({
           projectId={projectId}
           onRequestCreate={setPending}
           onRequestAddRelationship={openRelationshipDialog}
+          onRequestMove={setMoveEntityId}
         />
       </div>
 
@@ -152,6 +155,13 @@ export function Sidebar({
         onOpenChange={setRelationshipDialogOpen}
         projectId={projectId}
         initialSourceId={relationshipSourceId}
+      />
+      <MoveEntityDialog
+        open={moveEntityId !== null}
+        onOpenChange={(open) => {
+          if (!open) setMoveEntityId(null);
+        }}
+        entityId={moveEntityId}
       />
     </div>
   );

@@ -1,7 +1,6 @@
 import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { InfoPanel } from "./InfoPanel";
-import { TabBar } from "./TabBar";
 
 export function SidePanel({ className }: { className?: string }) {
   const hasOpenTabs = useModelStore((state) => state.openTabs.length > 0);
@@ -14,7 +13,6 @@ export function SidePanel({ className }: { className?: string }) {
         className,
       )}
     >
-      <TabBar />
       <InfoPanel />
     </div>
   );

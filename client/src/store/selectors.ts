@@ -86,6 +86,33 @@ export function getOrbitWorldOrigin(state: ModelState, orbitId: string): Vector3
   return add(orbit.origin, space.origin);
 }
 
+export interface SpaceDeleteImpact {
+  orbits: number;
+  entities: number;
+  relationships: number;
+}
+
+// Used only for cascade-confirmation dialog messaging — store.ts's deleteSpace keeps its own
+// inline cascade logic, this just previews the same shape before the user commits to it.
+export function spaceDeleteImpact(state: ModelState, spaceId: string): SpaceDeleteImpact {
+  const entities = entitiesInSpace(state, spaceId);
+  const relationshipIds = new Set<string>();
+  for (const entity of entities) {
+    for (const rel of relationshipsForEntity(state, entity.id)) relationshipIds.add(rel.id);
+  }
+
+  return {
+    orbits: orbitsInSpace(state, spaceId).length,
+    entities: entities.length,
+    relationships: relationshipIds.size,
+  };
+}
+
+// Same preview purpose as spaceDeleteImpact, for deleteEntity's cascade (its relationships).
+export function entityDeleteImpact(state: ModelState, entityId: string): { relationships: number } {
+  return { relationships: relationshipsForEntity(state, entityId).length };
+}
+
 export interface SearchResult {
   id: string;
   type: "project" | "space" | "orbit" | "entity";

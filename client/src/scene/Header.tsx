@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { allProjects } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import { CreateDialog } from "./CreateDialog";
+import { TabBar } from "./TabBar";
 import { useViewStore } from "./viewStore";
 
 export function Header({
@@ -57,6 +58,8 @@ export function Header({
           <Plus />
         </Button>
       </div>
+
+      <TabBar />
 
       <Button onClick={requestResetView}>Reset view</Button>
 

@@ -1,7 +1,7 @@
 # Progress recap
 
 Status as of 2026-08-03. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
-`server` Bun+Hono, unused so far). 67 tests passing, build/lint clean. Full
+`server` Bun+Hono, unused so far). 79 tests passing, build/lint clean. Full
 plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
 9 → 10 → 11`.
 
@@ -10,11 +10,12 @@ plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 
 **Phase 1 — Core data model** (`client/src/store/`)
 Project/Space/Orbit/Entity/Relationship/Note types matching the schema in
 plan.md. Zustand store as flat `Map<id, T>` per type, parent-up references. Validation
-enforced at the store layer: no self-relationships, entities require a space, moving
-an entity is a field-only update that never touches relationships, deleting a space
-cascades to its orbits/entities/relationships. Tab selection state (`openTabs`/
-`activeTabId`) with cascade-aware pruning. Selectors for derived queries, world-position
-resolution, and title/tag search.
+enforced at the store layer: no self-relationships, entities require a space, deleting
+a space cascades to its orbits/entities/relationships. Moving an entity never touches
+relationships, and (since the Phase 8 pass below) re-bases `position` so world position
+is preserved across the move rather than being a pure field update. Tab selection state
+(`openTabs`/`activeTabId`) with cascade-aware pruning. Selectors for derived queries,
+world-position resolution, and title/tag search.
 
 **Phase 2 — Space & orbit rendering** (`client/src/scene/BoundarySphere.tsx`,
 `SpaceBoundary.tsx`, `OrbitBoundary.tsx`)
@@ -258,6 +259,80 @@ plan.md phase — data model correction, `client/src/store/types.ts`,
 - `seed.ts`'s demo notes were expanded (longer text, a second note on every object that
   already had one) specifically to exercise that overflow/multi-note-stacking handling.
 
+**Phase 8 (part 1) — Delete + move entity UI** (`client/src/scene/DeleteConfirmDialog.tsx`,
+`MoveEntityDialog.tsx`, `SidebarTree.tsx`, `Sidebar.tsx`, `InfoPanel.tsx`,
+`client/src/store/store.ts`, `selectors.ts`)
+Scoped deliberately to just these two of Phase 8's four pieces (notes/tags/metadata
+editing and repositioning are still TODO, see below) — the store already implemented
+both, only the UI was missing.
+- `DeleteConfirmDialog.tsx`: generic confirm dialog (same shared shape as `CreateDialog.tsx`),
+  used by every delete entry point. Space/orbit/entity rows get a destructive "Delete"
+  item at the bottom of their existing sidebar `ContextMenu` (`RowContextMenu` gained an
+  `onDelete` prop); the confirmation message is built from two new pure selectors,
+  `spaceDeleteImpact`/`entityDeleteImpact` (orbit/entity/relationship counts, entity
+  count respectively) — `store.ts`'s own cascade logic in `deleteSpace`/`deleteOrbit`/
+  `deleteEntity` is untouched, these just preview the same shape ahead of time.
+  Relationships have no sidebar row, so their only delete entry point is a button added
+  to `InfoPanel.tsx`'s `RelationshipDetails`.
+- `MoveEntityDialog.tsx`: modeled directly on `AddRelationshipDialog.tsx`'s two-dependent-
+  `Select`s structure — target space, then target orbit (or "no orbit", via a local
+  `"__none__"` sentinel value since Radix `Select` can't use an empty string) scoped to
+  that space. Triggered by a new "Move to..." item on entity rows.
+- **Bug found and fixed along the way**: plan.md's own data model says moving an entity
+  means "re-parenting, re-basing position to the new local origin," but `moveEntity` had
+  only ever been a field update (`spaceId`/`orbitId` reassigned, `position` untouched) —
+  nothing exercised that path before this UI existed. Left as-is, an entity's local
+  offset would get silently reinterpreted against the new parent's origin and jump in
+  world space on every move. Fixed by computing `getWorldPosition` before the move and
+  `subtract`-ing the new parent's origin (`getOrbitWorldOrigin` or the space's own
+  `origin`) to re-derive `position`, so world position is now preserved across a move —
+  matching the documented design. Covered by two new tests moving an entity across
+  spaces/orbits with different origins and asserting world position is unchanged.
+  **Known follow-on, not fixed here**: space creation from the sidebar (`Sidebar.tsx`'s
+  `handleCreate`) has no origin field and always calls `addSpace({ projectId, name })`,
+  so every UI-created space defaults to the same `{0,0,0}` origin — meaning a move
+  between two UI-created spaces currently produces *no visible relocation at all* (world
+  position is preserved, and since both parents share an origin, local position doesn't
+  even need to change). Confirmed intentional/expected with the user; left for later
+  rather than adding an origin field to `CreateDialog` in this pass.
+
+**Phase 8 (part 2) — Notes, tags & metadata editing UI** (`client/src/scene/TagEditor.tsx`,
+`MetadataEditor.tsx`, `NoteDialog.tsx`, `InfoPanel.tsx`, `client/src/store/store.ts`,
+`types.ts`, `seed.ts`)
+Closes out Phase 8's remaining pieces except repositioning (still deferred, see TODO).
+Three separate editing surfaces per explicit user direction ("notes editing is separate
+from tag/metadata editing"), scoped to Space/Orbit/Entity for tags/metadata and
+Space/Orbit/Entity/Relationship for notes — Relationship has no `tags`/`metadata` fields
+in the data model, so it only gets note editing.
+- `TagEditor.tsx`/`MetadataEditor.tsx`: presentational, no store coupling — each takes
+  the current value plus an `onUpdate` callback, so `InfoPanel.tsx`'s `EntityDetails`/
+  `OrbitDetails`/`SpaceDetails` (which already fetch their own record) are the ones that
+  bind the specific store action (`updateEntityTags` vs. `updateOrbitTags`, etc.) into
+  that callback — `GroupDetails` itself stays generic across the three types, same
+  division of responsibility it already had. Metadata values are always written back as
+  strings from the editor's text input (a plain scope simplification — a value typed
+  through the UI can't stay a `number`; only seed-set values do).
+- A note's own optional `metadata` bag (plan.md's CIDR/VLAN example) stays read-only —
+  the add/edit note dialog (`NoteDialog.tsx`, modeled on `CreateDialog.tsx`'s
+  reused-instance/resync-on-open pattern) is just title + text. `MetadataTable` (the
+  read-only renderer) is unchanged, now used only for that.
+- `NoteList` in `InfoPanel.tsx` gained `targetType`/`targetId` props, an "Add note"
+  button, and per-note edit/delete icon buttons (delete reuses `DeleteConfirmDialog`
+  from part 1). It no longer early-returns `null` on an empty `notes` array, since the
+  header + add button need to render even with zero notes.
+- `addNote`/`updateNote`/`deleteNote` in `store.ts` were unified onto a shared
+  `notesPatch`/`withNotes` helper (look up the record by `targetType`, replace its
+  `notes` array) — `addNote` existed alone before; adding the other two made the
+  "3 actions, same lookup-and-replace shape" duplication worth collapsing.
+- **Data-model change, not just a UI addition**: `Project.notes` is removed entirely
+  (not merely left without a UI) — confirmed with the user that notes/tags/metadata are
+  exclusively a Space/Orbit/Entity(/Relationship, notes only) concept going forward.
+  `NoteTargetType` narrowed from 5 variants to 4 (drops `"project"`); `addProject` no
+  longer initializes a `notes` array; `seed.ts`'s two demo project notes are gone.
+  plan.md's data model, decision #6, the stale "Project-level notes have no UI yet" note,
+  and the now-resolved "Delete and move-entity UI" open question (part 1's work) were all
+  updated in the same pass.
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing
@@ -313,15 +388,13 @@ plan.md phase — data model correction, `client/src/store/types.ts`,
 - Manual drag position (once dragging/editing exists again) always overrides
   auto-layout for whatever was moved
 
-**Phase 8 — Editing UI**
-- Full add/edit/delete for notes (all 5 levels), metadata, tags — `addNote` exists in
-  the store (now with a required `title`) but has no UI caller yet
-- Move entity between spaces/orbits (re-parent + re-base position) — store logic
-  already exists (`moveEntity`), just needs UI
-- Delete space/orbit/entity/relationship with cascade-confirmation UI — store logic
-  already exists, no UI trigger yet
-- Probably where entity/space/orbit *repositioning* comes back, this time scoped
-  deliberately (the earlier drag implementation was removed, not replaced)
+**Phase 8 — Editing UI** (delete, move, and notes/tags/metadata editing all done, see
+above; still TODO:)
+- Entity/space/orbit *repositioning*, this time scoped deliberately (the earlier drag
+  implementation was removed, not replaced) — the last piece of Phase 8
+- No origin field on space creation (see the Phase 8 part 1 entry above) — worth
+  revisiting alongside repositioning, since right now a moved entity only visibly
+  relocates if its old and new parent happen to have different origins
 
 **Phase 9 — Persistence & export**
 - JSON serialize/deserialize (all note levels, metadata, tags)

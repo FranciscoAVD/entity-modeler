@@ -3,6 +3,7 @@ import {
   allProjects,
   entitiesInProject,
   entitiesInSpace,
+  entityDeleteImpact,
   getOrbitWorldOrigin,
   getWorldPosition,
   relationshipScope,
@@ -10,6 +11,7 @@ import {
   searchAll,
   searchByTag,
   searchByTitle,
+  spaceDeleteImpact,
   tabLabel,
 } from "./selectors";
 import { useModelStore } from "./store";
@@ -77,6 +79,42 @@ describe("relationships", () => {
   });
 });
 
+describe("moveEntity", () => {
+  it("preserves world position when moving into a space with a different origin", () => {
+    const { addProject, addSpace, addEntity, moveEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A", origin: { x: 0, y: 0, z: 0 } });
+    const spaceB = addSpace({ projectId, name: "B", origin: { x: 100, y: 0, z: 0 } });
+    const entityId = addEntity({ spaceId: spaceA, name: "E", position: { x: 1, y: 2, z: 3 } });
+
+    const before = getWorldPosition(useModelStore.getState(), entityId);
+    moveEntity(entityId, { spaceId: spaceB });
+    const after = getWorldPosition(useModelStore.getState(), entityId);
+
+    expect(after).toEqual(before);
+    expect(useModelStore.getState().entities.get(entityId)?.position).toEqual({
+      x: -99,
+      y: 2,
+      z: 3,
+    });
+  });
+
+  it("preserves world position when moving into an orbit with a different origin", () => {
+    const { addProject, addSpace, addOrbit, addEntity, moveEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
+    const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 1, z: 1 } });
+
+    const before = getWorldPosition(useModelStore.getState(), entityId);
+    moveEntity(entityId, { spaceId, orbitId });
+    const after = getWorldPosition(useModelStore.getState(), entityId);
+
+    expect(after).toEqual(before);
+    expect(useModelStore.getState().entities.get(entityId)?.orbitId).toBe(orbitId);
+  });
+});
+
 describe("updateEntityPosition", () => {
   it("updates only the position field", () => {
     const { addEntity, updateEntityPosition } = useModelStore.getState();
@@ -93,6 +131,100 @@ describe("updateEntityPosition", () => {
   it("throws for an unknown entity", () => {
     const { updateEntityPosition } = useModelStore.getState();
     expect(() => updateEntityPosition("missing", { x: 0, y: 0, z: 0 })).toThrow();
+  });
+});
+
+describe("tags and metadata", () => {
+  it("updateEntityTags replaces the tags array without touching other fields", () => {
+    const { addEntity, updateEntityTags } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node", tags: ["a"] });
+
+    updateEntityTags(entityId, ["b", "c"]);
+
+    const entity = useModelStore.getState().entities.get(entityId);
+    expect(entity?.tags).toEqual(["b", "c"]);
+    expect(entity?.name).toBe("Node");
+  });
+
+  it("updateOrbitTags and updateSpaceTags update their respective records", () => {
+    const { addOrbit, updateOrbitTags, updateSpaceTags } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "Orbit" });
+
+    updateSpaceTags(spaceId, ["prod"]);
+    updateOrbitTags(orbitId, ["core"]);
+
+    expect(useModelStore.getState().spaces.get(spaceId)?.tags).toEqual(["prod"]);
+    expect(useModelStore.getState().orbits.get(orbitId)?.tags).toEqual(["core"]);
+  });
+
+  it("updateEntityMetadata sets and clears the metadata bag", () => {
+    const { addEntity, updateEntityMetadata } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node" });
+
+    updateEntityMetadata(entityId, { version: "1.0" });
+    expect(useModelStore.getState().entities.get(entityId)?.metadata).toEqual({ version: "1.0" });
+
+    updateEntityMetadata(entityId, undefined);
+    expect(useModelStore.getState().entities.get(entityId)?.metadata).toBeUndefined();
+  });
+
+  it("updateOrbitMetadata and updateSpaceMetadata update their respective records", () => {
+    const { addOrbit, updateOrbitMetadata, updateSpaceMetadata } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const orbitId = addOrbit({ spaceId, name: "Orbit" });
+
+    updateSpaceMetadata(spaceId, { region: "us-east-1" });
+    updateOrbitMetadata(orbitId, { owner: "platform" });
+
+    expect(useModelStore.getState().spaces.get(spaceId)?.metadata).toEqual({ region: "us-east-1" });
+    expect(useModelStore.getState().orbits.get(orbitId)?.metadata).toEqual({ owner: "platform" });
+  });
+
+  it("throws for an unknown target", () => {
+    const { updateEntityTags, updateOrbitMetadata } = useModelStore.getState();
+    expect(() => updateEntityTags("missing", ["x"])).toThrow();
+    expect(() => updateOrbitMetadata("missing", { a: 1 })).toThrow();
+  });
+});
+
+describe("notes", () => {
+  it("addNote, updateNote, and deleteNote round-trip on an entity", () => {
+    const { addEntity, addNote, updateNote, deleteNote } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node" });
+
+    const noteId = addNote("entity", entityId, { title: "Original", text: "First draft" });
+    expect(useModelStore.getState().entities.get(entityId)?.notes).toHaveLength(1);
+
+    updateNote("entity", entityId, noteId, { title: "Updated", text: "Second draft" });
+    const updated = useModelStore.getState().entities.get(entityId)?.notes[0];
+    expect(updated).toMatchObject({ title: "Updated", text: "Second draft" });
+
+    deleteNote("entity", entityId, noteId);
+    expect(useModelStore.getState().entities.get(entityId)?.notes).toHaveLength(0);
+  });
+
+  it("works on a relationship target too", () => {
+    const { addEntity, addRelationship, addNote, updateNote, deleteNote } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    const noteId = addNote("relationship", relId, { title: "Path", text: "Direct" });
+    updateNote("relationship", relId, noteId, { title: "Path", text: "Via VPN" });
+    expect(useModelStore.getState().relationships.get(relId)?.notes[0]?.text).toBe("Via VPN");
+
+    deleteNote("relationship", relId, noteId);
+    expect(useModelStore.getState().relationships.get(relId)?.notes).toHaveLength(0);
+  });
+
+  it("throws for an unknown target", () => {
+    const { addNote } = useModelStore.getState();
+    expect(() => addNote("entity", "missing", { title: "T", text: "X" })).toThrow();
   });
 });
 
@@ -131,6 +263,38 @@ describe("cascading deletes", () => {
     expect(state.orbits.has(orbitId)).toBe(false);
     expect(state.entities.has(entityId)).toBe(true);
     expect(state.entities.get(entityId)?.orbitId).toBeUndefined();
+  });
+});
+
+describe("delete-impact selectors", () => {
+  it("spaceDeleteImpact counts orbits, entities, and relationships touching the space", () => {
+    const { addSpace, addOrbit, addEntity, addRelationship, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const orbitId = addOrbit({ spaceId: spaceA, name: "Orbit" });
+    const inA = addEntity({ spaceId: spaceA, orbitId, name: "InA" });
+    const ungroupedInA = addEntity({ spaceId: spaceA, name: "UngroupedInA" });
+    const inB = addEntity({ spaceId: spaceB, name: "InB" });
+    addRelationship({ sourceId: inA, targetId: ungroupedInA, cardinality: "1:1" }); // local to A
+    addRelationship({ sourceId: ungroupedInA, targetId: inB, cardinality: "1:N" }); // touches A
+
+    const impact = spaceDeleteImpact(useModelStore.getState(), spaceA);
+
+    expect(impact).toEqual({ orbits: 1, entities: 2, relationships: 2 });
+  });
+
+  it("entityDeleteImpact counts relationships touching the entity", () => {
+    const { addEntity, addRelationship } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const c = addEntity({ spaceId, name: "C" });
+    addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    addRelationship({ sourceId: c, targetId: a, cardinality: "1:N" });
+    addRelationship({ sourceId: b, targetId: c, cardinality: "N:M" }); // doesn't touch a
+
+    expect(entityDeleteImpact(useModelStore.getState(), a)).toEqual({ relationships: 2 });
   });
 });
 

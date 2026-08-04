@@ -18,7 +18,6 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
-  notes: Note[];
 }
 
 export interface Space {
@@ -71,4 +70,8 @@ export interface Tab {
   type: TabType;
 }
 
-export type NoteTargetType = "project" | "space" | "orbit" | "entity" | "relationship";
+export type NoteTargetType = "space" | "orbit" | "entity" | "relationship";
+
+// Space/Orbit/Entity share the same tags/metadata shape and are the only types that
+// carry them — Relationship gets notes but no tags/metadata, per plan.md decision #11.
+export type GroupTargetType = "space" | "orbit" | "entity";

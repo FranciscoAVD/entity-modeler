@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { spacesInProject } from "./selectors";
+import { subtract } from "@/lib/vector3";
+import { getOrbitWorldOrigin, getWorldPosition, spacesInProject } from "./selectors";
 import type {
   Cardinality,
   Entity,
@@ -61,6 +62,13 @@ export interface ModelActions {
   renameOrbit(orbitId: string, name: string): void;
   renameEntity(entityId: string, name: string): void;
 
+  updateSpaceTags(spaceId: string, tags: string[]): void;
+  updateOrbitTags(orbitId: string, tags: string[]): void;
+  updateEntityTags(entityId: string, tags: string[]): void;
+  updateSpaceMetadata(spaceId: string, metadata: Record<string, string | number> | undefined): void;
+  updateOrbitMetadata(orbitId: string, metadata: Record<string, string | number> | undefined): void;
+  updateEntityMetadata(entityId: string, metadata: Record<string, string | number> | undefined): void;
+
   deleteProject(projectId: string): void;
   deleteSpace(spaceId: string): void;
   deleteOrbit(orbitId: string): void;
@@ -72,6 +80,13 @@ export interface ModelActions {
     targetId: string,
     note: { title: string; text: string; author?: string; metadata?: Record<string, string | number> },
   ): string;
+  updateNote(
+    targetType: NoteTargetType,
+    targetId: string,
+    noteId: string,
+    patch: { title: string; text: string },
+  ): void;
+  deleteNote(targetType: NoteTargetType, targetId: string, noteId: string): void;
 
   openTab(id: string, type: TabType): void;
   setActiveTab(id: string): void;
@@ -101,6 +116,39 @@ function pruneTabs(
   return { openTabs: remaining, activeTabId: nextActiveTabId };
 }
 
+// Shared by addNote/updateNote/deleteNote — all three are "look up the record by type,
+// replace its notes array" with a different updater, so the type-dispatch and copy-map-set
+// mechanics only need to exist once.
+function withNotes<T extends { notes: Note[] }>(
+  map: Map<string, T>,
+  targetId: string,
+  updater: (notes: Note[]) => Note[],
+): Map<string, T> {
+  const record = map.get(targetId);
+  if (!record) throw new Error(`Not found: ${targetId}`);
+  const next = new Map(map);
+  next.set(targetId, { ...record, notes: updater(record.notes) });
+  return next;
+}
+
+function notesPatch(
+  state: ModelState,
+  targetType: NoteTargetType,
+  targetId: string,
+  updater: (notes: Note[]) => Note[],
+): Partial<ModelState> {
+  switch (targetType) {
+    case "space":
+      return { spaces: withNotes(state.spaces, targetId, updater) };
+    case "orbit":
+      return { orbits: withNotes(state.orbits, targetId, updater) };
+    case "entity":
+      return { entities: withNotes(state.entities, targetId, updater) };
+    case "relationship":
+      return { relationships: withNotes(state.relationships, targetId, updater) };
+  }
+}
+
 export const useModelStore = create<ModelState & ModelActions>()((set, get) => ({
   projects: new Map(),
   spaces: new Map(),
@@ -113,7 +161,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   addProject({ name, description }) {
     const id = crypto.randomUUID();
     const projects = new Map(get().projects);
-    projects.set(id, { id, name, description, notes: [] });
+    projects.set(id, { id, name, description });
     set({ projects });
     return id;
   },
@@ -203,7 +251,8 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     const entity = state.entities.get(entityId);
     if (!entity) throw new Error(`Entity not found: ${entityId}`);
-    if (!state.spaces.has(spaceId)) throw new Error(`Space not found: ${spaceId}`);
+    const newSpace = state.spaces.get(spaceId);
+    if (!newSpace) throw new Error(`Space not found: ${spaceId}`);
     if (orbitId !== undefined) {
       const orbit = state.orbits.get(orbitId);
       if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
@@ -212,9 +261,16 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       }
     }
 
-    // Field update only — relationships reference entities by id and are never touched by a move.
+    // Re-base position so the entity's *world* position is preserved across the move — its old
+    // local offset was relative to the old parent's origin, and would otherwise be silently
+    // reinterpreted against the new one. Relationships reference entities by id and are never
+    // touched by a move.
+    const worldPosition = getWorldPosition(state, entityId);
+    const newParentOrigin = orbitId !== undefined ? getOrbitWorldOrigin(state, orbitId) : newSpace.origin;
+    const position = subtract(worldPosition, newParentOrigin);
+
     const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, spaceId, orbitId });
+    entities.set(entityId, { ...entity, spaceId, orbitId, position });
     set({ entities });
   },
 
@@ -255,6 +311,66 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
     const entities = new Map(state.entities);
     entities.set(entityId, { ...entity, name });
+    set({ entities });
+  },
+
+  updateSpaceTags(spaceId, tags) {
+    const state = get();
+    const space = state.spaces.get(spaceId);
+    if (!space) throw new Error(`Space not found: ${spaceId}`);
+
+    const spaces = new Map(state.spaces);
+    spaces.set(spaceId, { ...space, tags });
+    set({ spaces });
+  },
+
+  updateOrbitTags(orbitId, tags) {
+    const state = get();
+    const orbit = state.orbits.get(orbitId);
+    if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
+
+    const orbits = new Map(state.orbits);
+    orbits.set(orbitId, { ...orbit, tags });
+    set({ orbits });
+  },
+
+  updateEntityTags(entityId, tags) {
+    const state = get();
+    const entity = state.entities.get(entityId);
+    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+
+    const entities = new Map(state.entities);
+    entities.set(entityId, { ...entity, tags });
+    set({ entities });
+  },
+
+  updateSpaceMetadata(spaceId, metadata) {
+    const state = get();
+    const space = state.spaces.get(spaceId);
+    if (!space) throw new Error(`Space not found: ${spaceId}`);
+
+    const spaces = new Map(state.spaces);
+    spaces.set(spaceId, { ...space, metadata });
+    set({ spaces });
+  },
+
+  updateOrbitMetadata(orbitId, metadata) {
+    const state = get();
+    const orbit = state.orbits.get(orbitId);
+    if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
+
+    const orbits = new Map(state.orbits);
+    orbits.set(orbitId, { ...orbit, metadata });
+    set({ orbits });
+  },
+
+  updateEntityMetadata(entityId, metadata) {
+    const state = get();
+    const entity = state.entities.get(entityId);
+    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+
+    const entities = new Map(state.entities);
+    entities.set(entityId, { ...entity, metadata });
     set({ entities });
   },
 
@@ -364,7 +480,6 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   },
 
   addNote(targetType, targetId, note) {
-    const state = get();
     const id = crypto.randomUUID();
     const fullNote: Note = {
       id,
@@ -375,50 +490,20 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       metadata: note.metadata,
     };
 
-    switch (targetType) {
-      case "project": {
-        const project = state.projects.get(targetId);
-        if (!project) throw new Error(`Project not found: ${targetId}`);
-        const projects = new Map(state.projects);
-        projects.set(targetId, { ...project, notes: [...project.notes, fullNote] });
-        set({ projects });
-        break;
-      }
-      case "space": {
-        const space = state.spaces.get(targetId);
-        if (!space) throw new Error(`Space not found: ${targetId}`);
-        const spaces = new Map(state.spaces);
-        spaces.set(targetId, { ...space, notes: [...space.notes, fullNote] });
-        set({ spaces });
-        break;
-      }
-      case "orbit": {
-        const orbit = state.orbits.get(targetId);
-        if (!orbit) throw new Error(`Orbit not found: ${targetId}`);
-        const orbits = new Map(state.orbits);
-        orbits.set(targetId, { ...orbit, notes: [...orbit.notes, fullNote] });
-        set({ orbits });
-        break;
-      }
-      case "entity": {
-        const entity = state.entities.get(targetId);
-        if (!entity) throw new Error(`Entity not found: ${targetId}`);
-        const entities = new Map(state.entities);
-        entities.set(targetId, { ...entity, notes: [...entity.notes, fullNote] });
-        set({ entities });
-        break;
-      }
-      case "relationship": {
-        const relationship = state.relationships.get(targetId);
-        if (!relationship) throw new Error(`Relationship not found: ${targetId}`);
-        const relationships = new Map(state.relationships);
-        relationships.set(targetId, { ...relationship, notes: [...relationship.notes, fullNote] });
-        set({ relationships });
-        break;
-      }
-    }
-
+    set(notesPatch(get(), targetType, targetId, (notes) => [...notes, fullNote]));
     return id;
+  },
+
+  updateNote(targetType, targetId, noteId, patch) {
+    set(
+      notesPatch(get(), targetType, targetId, (notes) =>
+        notes.map((n) => (n.id === noteId ? { ...n, ...patch } : n)),
+      ),
+    );
+  },
+
+  deleteNote(targetType, targetId, noteId) {
+    set(notesPatch(get(), targetType, targetId, (notes) => notes.filter((n) => n.id !== noteId)));
   },
 
   openTab(id, type) {
