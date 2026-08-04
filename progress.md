@@ -582,10 +582,14 @@ above; still TODO:)
   relocates if its old and new parent happen to have different origins
 
 **Phase 9 — Persistence & export**
-- JSON serialize/deserialize (all note levels, metadata, tags)
+- Decided: persistence is server-backed — SQLite via Bun's native driver
+  (`bun:sqlite`) accessed through drizzle-orm, living in the `server` package
+  (currently an unused Hono skeleton). Not started; no schema, no drizzle config,
+  no migrations yet.
+- JSON serialize/deserialize (all note levels, metadata, tags) — still needed as the
+  wire format even with a DB backing it, and/or for import/export independent of the
+  server
 - Flatten-to-orthographic export (PNG/PDF) at project/space/orbit scope
-- Probably where `server` (currently an unused Hono skeleton) starts being used, if
-  persistence is server-backed rather than local-only
 
 **Phase 10 — Performance polish**
 - LOD for text/geometry at distance, frustum culling

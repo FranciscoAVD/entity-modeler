@@ -225,7 +225,8 @@ Delete space/orbit — cascade confirmation UI, since this is destructive and to
 
 Phase 9 — Persistence & export (not started)
 
-JSON serialize/deserialize including all note levels, metadata, and tags
+Persistence is server-backed: SQLite via Bun's native driver (bun:sqlite), accessed through drizzle-orm, living in the `server` package (currently an unused Hono skeleton) — resolves the "local-only vs. server-backed" open question in progress.md in favor of server-backed
+JSON serialize/deserialize including all note levels, metadata, and tags — the wire/storage shape this persists is the same normalized store shape already in `client/src/store` (flat collections per type, parent references point up), so persistence is schema-per-type rather than one big nested JSON blob
 Export: since 3D doesn't screenshot cleanly, include a "flatten to top-down orthographic" mode for PNG/PDF snapshots, selectable at project, space, or orbit scope
 
 Phase 10 — Performance polish (not started)
