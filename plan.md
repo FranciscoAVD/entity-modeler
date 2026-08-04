@@ -204,12 +204,12 @@ Unified raycasting across spheres + hit-tubes + orbit bounds → tab-open dispat
 Animated camera fly-to on tab activation; independent "reset view" control
 Camera-plane-constrained dragging for repositioning entities (modifier key for depth movement)
 
-Phase 6 — Tabs, notes & search UI (partially done — tab bar, generic info panel, and search input all exist; add/edit/delete note UI does not, addNote in the store has no UI caller)
+Phase 6 — Tabs, notes & search UI (done — add/edit/delete note UI was scoped out of the initial pass and delivered later under Phase 8's work instead, see below)
 
 Tab bar is now a recently-viewed Select (switch only, no manual open/close — see decision #12), info panel generic across entity/relationship/orbit/space, with entity/orbit/space sharing one GroupDetails renderer since they're now the same shape (tags, metadata, notes)
 Space info now goes through this same panel (SpaceDetails) rather than staying a separate always-on label-only affordance — this reverses the line's original assumption, see the reveal-flow note above
 Search input (tags + titles); results fly the camera like a sidebar-row click, not a full tab-open — see the Search section above
-If authoring tool: add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level
+Add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level — built, but as part of Phase 8's editing-UI pass rather than in this one
 
 Phase 7 — 3D auto-layout (not started — no layout algorithm exists; bounds.ts is a static count-based sizing heuristic, not a layout)
 
