@@ -495,6 +495,29 @@ meant editing every object that had it, one at a time).
   taggable type, a validation-rules line for the delete-tag cascade), and Phase 1
   status updated to match.
 
+**"Relationships" submenu on entity rows** (not a plan.md phase — sidebar UX,
+`client/src/scene/SidebarTree.tsx`)
+`EntityRow`'s context menu previously had a single top-level "Add relationship" item.
+Replaced with a `ContextMenuSub` ("Relationships", no leading icon — went through one
+iteration with a leading `ArrowRightLeft` on the trigger itself, removed per feedback
+since the submenu's own chevron already signals "more inside") listing every
+relationship the entity participates in (via the existing `relationshipsForEntity`
+selector), with "Add relationship" moved to the end of that submenu behind a
+separator — an empty list shows a disabled "No relationships yet" placeholder instead
+of nothing. Each listed relationship renders as `{source} [icon] {target}` — the icon
+is cardinality-dependent (`ArrowRightLeft` for N:M, `ArrowRight` for 1:1/1:N), the
+same mapping `InfoPanel`'s relationship title uses, replacing an initial plain `→`
+text version per feedback ("icons in the submenu match the relationship type").
+Clicking a listed relationship calls `focusOn(id, "relationship")`, the same
+camera-only-no-tab behavior every other sidebar row/search-result click already uses;
+"Move to..." stays a top-level item, unaffected. Deliberately built the label list via
+`useShallow` over `relationshipsForEntity`'s output (stable `Relationship` object
+references already in the store) plus a separate plain `entities` Map subscription,
+rather than mapping to fresh `{id, label}` objects inside the selector itself — the
+latter would repeat the `getSnapshot`-returns-a-new-reference-every-call bug
+documented below (`searchAll`), since freshly-constructed elements defeat
+`useShallow`'s one-level comparison.
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing

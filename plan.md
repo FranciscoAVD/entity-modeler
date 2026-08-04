@@ -240,7 +240,7 @@ Single-user assumption documented as a current constraint (not designed for conc
 
 Build order: 0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11 — spaces/orbits come right after the data model since nodes are meaningless without a parent coordinate frame; camera/interaction comes before edges to get things visible and clickable early; everything else follows dependency order.
 
-Not on this list but built along the way: a right-click context menu on sidebar space/orbit/entity rows (rename, view notes, visibility toggle, "Add orbit"/"Add node"/"Add relationship" as applicable), plus the sidebar tree itself (collapsible space → orbit → entity list, click-to-focus, search). It's a Phase 8-ish "add/rename" UI and a Phase 6-ish "notes" affordance built ad hoc alongside the Phase 2/3 rendering work, rather than in the build-order sequence above.
+Not on this list but built along the way: a right-click context menu on sidebar space/orbit/entity rows (rename, view notes, visibility toggle, "Add orbit"/"Add node" as applicable, a "Relationships" submenu on entity rows listing that entity's relationships (cardinality-dependent icon per row) with "Add relationship" at the end), plus the sidebar tree itself (collapsible space → orbit → entity list, click-to-focus, search). It's a Phase 8-ish "add/rename" UI and a Phase 6-ish "notes" affordance built ad hoc alongside the Phase 2/3 rendering work, rather than in the build-order sequence above.
 
 Open questions / things to revisit later
 Multi-select bulk operations (bulk-move, bulk-delete, bulk-tag) beyond the tab pattern

@@ -1,4 +1,4 @@
-import { ArrowRightLeft, ChevronRight, Move, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, ChevronRight, Move, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,9 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
@@ -20,6 +23,7 @@ import {
   entitiesInOrbit,
   entityDeleteImpact,
   orbitsInSpace,
+  relationshipsForEntity,
   spaceDeleteImpact,
   spacesInProject,
   ungroupedEntitiesInSpace,
@@ -480,6 +484,15 @@ function EntityRow({
   const hidden =
     hiddenSpaceIds.has(entity.spaceId) ||
     (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId));
+  // relationshipsForEntity returns the same Relationship object references the store already
+  // holds, so useShallow's one-level comparison is comparing stable elements — unlike building
+  // fresh `{id, label}` objects per call here, which would defeat useShallow and risk the
+  // getSnapshot-loops-forever bug documented in progress.md. Labels are derived from `entities`
+  // (also a stable Map reference) at render time instead, not inside the selector.
+  const relationships = useModelStore(
+    useShallow((state) => relationshipsForEntity(state, entity.id)),
+  );
+  const entities = useModelStore((state) => state.entities);
 
   return (
     <RowContextMenu
@@ -488,10 +501,38 @@ function EntityRow({
       onDelete={() => onRequestDelete({ type: "entity", id: entity.id, name: entity.name })}
       extraItems={
         <>
-          <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
-            <ArrowRightLeft className="mr-1.5" />
-            Add relationship
-          </ContextMenuItem>
+          <ContextMenuSub>
+            <ContextMenuSubTrigger>Relationships</ContextMenuSubTrigger>
+            <ContextMenuSubContent>
+              {relationships.length === 0 ? (
+                <ContextMenuItem disabled>No relationships yet</ContextMenuItem>
+              ) : (
+                relationships.map((relationship) => {
+                  const sourceName = entities.get(relationship.sourceId)?.name ?? "?";
+                  const targetName = entities.get(relationship.targetId)?.name ?? "?";
+                  // Same cardinality → icon mapping as the InfoPanel title: N:M is the one
+                  // inherently-bidirectional cardinality, so it borrows the two-way arrow.
+                  const CardinalityIcon =
+                    relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
+                  return (
+                    <ContextMenuItem
+                      key={relationship.id}
+                      onSelect={() => focusOn(relationship.id, "relationship")}
+                    >
+                      <span className="min-w-0 truncate">{sourceName}</span>
+                      <CardinalityIcon className="mx-1 size-3.5 shrink-0" />
+                      <span className="min-w-0 truncate">{targetName}</span>
+                    </ContextMenuItem>
+                  );
+                })
+              )}
+              <ContextMenuSeparator />
+              <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
+                <ArrowRightLeft className="mr-1.5" />
+                Add relationship
+              </ContextMenuItem>
+            </ContextMenuSubContent>
+          </ContextMenuSub>
           <ContextMenuItem onSelect={() => onRequestMove(entity.id)}>
             <Move className="mr-1.5" />
             Move to...
