@@ -26,7 +26,7 @@ export interface Space {
   name: string;
   label?: string;
   origin: Vector3;
-  tags: string[];
+  tagIds: string[];
   notes: Note[];
   metadata?: Record<string, string | number>;
 }
@@ -37,7 +37,7 @@ export interface Orbit {
   name: string;
   label?: string;
   origin: Vector3;
-  tags: string[];
+  tagIds: string[];
   notes: Note[];
   metadata?: Record<string, string | number>;
 }
@@ -47,7 +47,7 @@ export interface Entity {
   spaceId: string;
   orbitId?: string;
   name: string;
-  tags: string[];
+  tagIds: string[];
   position: Vector3;
   notes: Note[];
   metadata?: Record<string, string | number>;
@@ -60,9 +60,17 @@ export interface Relationship {
   sourceId: string;
   targetId: string;
   cardinality: Cardinality;
-  tags: string[];
+  tagIds: string[];
   notes: Note[];
   metadata?: Record<string, string | number>;
+}
+
+// The shared tag registry (plan.md decision #11) — space/orbit/entity/relationship objects
+// reference tags by id (tagIds) rather than duplicating free-typed strings, so renaming a tag
+// only ever touches this one record, and every object that carries it picks up the new name.
+export interface Tag {
+  id: string;
+  name: string;
 }
 
 export type TabType = "entity" | "relationship" | "orbit" | "space";
@@ -74,6 +82,7 @@ export interface Tab {
 
 export type NoteTargetType = "space" | "orbit" | "entity" | "relationship";
 
-// Space/Orbit/Entity share the same tags/metadata shape and are the only types that
-// carry them — Relationship gets notes but no tags/metadata, per plan.md decision #11.
+// Space/Orbit/Entity share the same tags/metadata shape (Relationship also has tags/metadata,
+// per plan.md decision #11, but isn't part of GroupDetails' shared rendering path since it has
+// no name/label and its own bespoke InfoPanel layout).
 export type GroupTargetType = "space" | "orbit" | "entity";

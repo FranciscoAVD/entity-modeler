@@ -23,6 +23,7 @@ beforeEach(() => {
     orbits: new Map(),
     entities: new Map(),
     relationships: new Map(),
+    tags: new Map(),
     openTabs: [],
     activeTabId: null,
   });
@@ -206,8 +207,9 @@ describe("tags and metadata", () => {
 
     updateEntityTags(entityId, ["b", "c"]);
 
-    const entity = useModelStore.getState().entities.get(entityId);
-    expect(entity?.tags).toEqual(["b", "c"]);
+    const state = useModelStore.getState();
+    const entity = state.entities.get(entityId);
+    expect(entity?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual(["b", "c"]);
     expect(entity?.name).toBe("Node");
   });
 
@@ -219,8 +221,74 @@ describe("tags and metadata", () => {
     updateSpaceTags(spaceId, ["prod"]);
     updateOrbitTags(orbitId, ["core"]);
 
-    expect(useModelStore.getState().spaces.get(spaceId)?.tags).toEqual(["prod"]);
-    expect(useModelStore.getState().orbits.get(orbitId)?.tags).toEqual(["core"]);
+    const state = useModelStore.getState();
+    expect(state.spaces.get(spaceId)?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual([
+      "prod",
+    ]);
+    expect(state.orbits.get(orbitId)?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual([
+      "core",
+    ]);
+  });
+
+  it("reuses an existing tag (case-insensitively) instead of creating a duplicate", () => {
+    const { addEntity, updateEntityTags } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A", tags: ["Billing"] });
+    const b = addEntity({ spaceId, name: "B", tags: ["billing"] });
+
+    const state = useModelStore.getState();
+    const aTagId = state.entities.get(a)?.tagIds[0];
+    const bTagId = state.entities.get(b)?.tagIds[0];
+    expect(aTagId).toBe(bTagId);
+    expect(state.tags.size).toBe(1);
+
+    updateEntityTags(a, ["Billing", "billing"]);
+    expect(useModelStore.getState().entities.get(a)?.tagIds).toHaveLength(1);
+  });
+
+  it("renameTag updates the shared name for every object referencing it", () => {
+    const { addEntity, addSpace, renameTag, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Space", tags: ["core"] });
+    const entityId = addEntity({ spaceId, name: "Node", tags: ["core"] });
+
+    const tagId = useModelStore.getState().spaces.get(spaceId)?.tagIds[0]!;
+    renameTag(tagId, "critical");
+
+    const state = useModelStore.getState();
+    expect(state.tags.get(tagId)?.name).toBe("critical");
+    expect(state.spaces.get(spaceId)?.tagIds).toContain(tagId);
+    expect(state.entities.get(entityId)?.tagIds).toContain(tagId);
+  });
+
+  it("renameTag throws for an unknown tag or an empty name", () => {
+    const { addEntity, renameTag } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node", tags: ["core"] });
+    const tagId = useModelStore.getState().entities.get(entityId)?.tagIds[0]!;
+
+    expect(() => renameTag("missing", "x")).toThrow();
+    expect(() => renameTag(tagId, "  ")).toThrow();
+  });
+
+  it("deleteTag removes it from the registry and every object that referenced it", () => {
+    const { addEntity, addSpace, deleteTag, addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Space", tags: ["core"] });
+    const entityId = addEntity({ spaceId, name: "Node", tags: ["core", "other"] });
+
+    const tagId = useModelStore.getState().spaces.get(spaceId)?.tagIds[0]!;
+    deleteTag(tagId);
+
+    const state = useModelStore.getState();
+    expect(state.tags.has(tagId)).toBe(false);
+    expect(state.spaces.get(spaceId)?.tagIds).toEqual([]);
+    expect(state.entities.get(entityId)?.tagIds).toHaveLength(1);
+  });
+
+  it("deleteTag throws for an unknown tag", () => {
+    const { deleteTag } = useModelStore.getState();
+    expect(() => deleteTag("missing")).toThrow();
   });
 
   it("updateEntityMetadata sets and clears the metadata bag", () => {
@@ -267,14 +335,20 @@ describe("tags and metadata", () => {
       metadata: { vlan: 12 },
     });
 
-    expect(useModelStore.getState().relationships.get(relId)?.tags).toEqual(["vpn"]);
-    expect(useModelStore.getState().relationships.get(relId)?.metadata).toEqual({ vlan: 12 });
+    const afterCreate = useModelStore.getState();
+    const createdTagId = afterCreate.relationships.get(relId)?.tagIds[0];
+    expect(createdTagId && afterCreate.tags.get(createdTagId)?.name).toBe("vpn");
+    expect(afterCreate.relationships.get(relId)?.metadata).toEqual({ vlan: 12 });
 
     updateRelationshipTags(relId, ["vpn", "cross-space"]);
     updateRelationshipMetadata(relId, undefined);
 
-    const relationship = useModelStore.getState().relationships.get(relId);
-    expect(relationship?.tags).toEqual(["vpn", "cross-space"]);
+    const state = useModelStore.getState();
+    const relationship = state.relationships.get(relId);
+    expect(relationship?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual([
+      "vpn",
+      "cross-space",
+    ]);
     expect(relationship?.metadata).toBeUndefined();
   });
 

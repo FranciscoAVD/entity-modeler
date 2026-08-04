@@ -449,6 +449,52 @@ data-model extension, `client/src/scene/InfoPanel.tsx`, `RelationshipEdge.tsx`,
   plan.md's decision #6 and #11, the data model, the visibility table, and Phase 1
   status were all updated to match.
 
+**Tags normalized into a shared registry** (plan.md decision #11's "planned but not
+built" item, `client/src/store/types.ts`, `store.ts`, `selectors.ts`,
+`scene/InfoPanel.tsx`, `scene/SidebarSearch.tsx`, `plan.md`)
+Space/Orbit/Entity/Relationship previously each stored `tags: string[]` inline —
+free-typed strings duplicated per object, with no shared identity (tagging two
+objects "Billing" and "billing" produced two unrelated strings, and renaming a tag
+meant editing every object that had it, one at a time).
+- New `Tag { id, name }` type and a flat `tags: Map<string, Tag>` collection on
+  `ModelState` — same "flat collection, parent references point up" shape as every
+  other type (decision #15), except tags have no parent; they're shared vocabulary
+  across the whole store. `Space`/`Orbit`/`Entity`/`Relationship` all swapped
+  `tags: string[]` for `tagIds: string[]`, referencing this registry.
+  - **Behavior stayed the same at the edges, changed underneath.** `TagEditor` and
+    every `add*`/`update*Tags` action still take/return plain `string[]` of *names* —
+    nothing about typing tags into a `TagEditor` looks different. A new private
+    `resolveTagIds(tags, names)` helper in `store.ts` does the "normalize on write"
+    step for all four `add*` actions and all four `update*Tags` actions: for each
+    typed name, reuse an existing tag if one matches case-insensitively, otherwise
+    create it in the registry, and store the resolved `tagIds` on the record. Verified
+    against the seed data: "Node 1" and "Remote Node" both tag "billing" and now
+    share one registry entry rather than two independent strings.
+  - Two new actions this unlocks: `renameTag(tagId, name)` — touches only the
+    registry record, so every object referencing it picks up the new name with zero
+    array surgery, the actual payoff of normalizing — and `deleteTag(tagId)`, which
+    removes the registry entry and strips the id out of every `tagIds` array that
+    held it (same "no dangling reference" cascade shape as `deleteSpace`). Neither has
+    a UI trigger yet — a global tag-management screen (browse/rename/delete tags,
+    autocomplete while typing in `TagEditor`) is still open, tracked in plan.md
+    decision #11 as the remaining "planned but not built" piece; the data model and
+    store actions it needs are now in place.
+  - `InfoPanel.tsx`'s `EntityDetails`/`OrbitDetails`/`SpaceDetails`/
+    `RelationshipDetails` each gained a `tagNamesForIds` (new selector) lookup —
+    resolving `record.tagIds` to display names via `useShallow`, same "subscribe to
+    stable Maps, not a freshly-built array" pattern documented below for `searchAll` —
+    and pass that resolved `tags` array into `GroupDetails`/`TagEditor` explicitly,
+    rather than relying on `{...record}` spread (which no longer has a `tags` field
+    to spread).
+  - `buildTagIndex`/`searchByTag`/`searchAll` in `selectors.ts` updated to resolve
+    tag names through the registry when building the index — external behavior is
+    unchanged (still an exact-match name index), `SidebarSearch.tsx` just had to
+    start subscribing to `state.tags` and threading it through alongside the other
+    Maps it already passes to `searchAll`.
+- plan.md's decision #11, the data model section (new `Tag` entry, `tagIds` on every
+  taggable type, a validation-rules line for the delete-tag cascade), and Phase 1
+  status updated to match.
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing

@@ -2,6 +2,13 @@ import { add } from "@/lib/vector3";
 import type { ModelState } from "./store";
 import type { Entity, Orbit, Project, Relationship, Space, Tab, Vector3 } from "./types";
 
+// Resolves tag ids (as stored on a space/orbit/entity/relationship) to their current display
+// names via the shared registry — dangling ids (e.g. a mid-render deleteTag race) are dropped
+// rather than surfaced as "undefined".
+export function tagNamesForIds(state: Pick<ModelState, "tags">, tagIds: string[]): string[] {
+  return tagIds.map((id) => state.tags.get(id)?.name).filter((name): name is string => name !== undefined);
+}
+
 export function allProjects(state: ModelState): Project[] {
   return [...state.projects.values()];
 }
@@ -125,8 +132,8 @@ export interface SearchResult {
   name: string;
 }
 
-type SearchableState = Pick<ModelState, "projects" | "spaces" | "orbits" | "entities">;
-type TaggableState = Pick<ModelState, "spaces" | "orbits" | "entities">;
+type SearchableState = Pick<ModelState, "projects" | "spaces" | "orbits" | "entities" | "tags">;
+type TaggableState = Pick<ModelState, "spaces" | "orbits" | "entities" | "tags">;
 
 // Relationships have no `name` field in the data model, so they're excluded from title search.
 export function searchByTitle(state: SearchableState, query: string): SearchResult[] {
@@ -150,13 +157,17 @@ export function searchByTitle(state: SearchableState, query: string): SearchResu
 }
 
 // Recomputed on demand rather than incrementally maintained. Keyed lowercase so lookup is
-// case-insensitive, matching searchByTitle's behavior.
+// case-insensitive, matching searchByTitle's behavior. Tags are stored as ids (plan.md decision
+// #11's normalized registry) — this resolves each id back to its current name via `state.tags`,
+// so a renamed tag is picked up automatically without touching any space/orbit/entity.
 export function buildTagIndex(state: TaggableState): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
-  const addAll = (items: Iterable<{ id: string; tags: string[] }>) => {
+  const addAll = (items: Iterable<{ id: string; tagIds: string[] }>) => {
     for (const item of items) {
-      for (const tag of item.tags) {
-        const key = tag.toLowerCase();
+      for (const tagId of item.tagIds) {
+        const tag = state.tags.get(tagId);
+        if (!tag) continue;
+        const key = tag.name.toLowerCase();
         if (!index.has(key)) index.set(key, new Set());
         index.get(key)!.add(item.id);
       }

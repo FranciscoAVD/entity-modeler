@@ -55,14 +55,15 @@ export function SidebarSearch() {
   const spaces = useModelStore((state) => state.spaces);
   const orbits = useModelStore((state) => state.orbits);
   const entities = useModelStore((state) => state.entities);
+  const tags = useModelStore((state) => state.tags);
   const focusOn = useViewStore((state) => state.focusOn);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
-    return searchAll({ projects, spaces, orbits, entities }, query);
-  }, [query, projects, spaces, orbits, entities]);
+    return searchAll({ projects, spaces, orbits, entities, tags }, query);
+  }, [query, projects, spaces, orbits, entities, tags]);
 
   // A hidden result has no scene geometry to fly to — resolveCameraFocus refuses to focus it
   // and falls through to whichever tab is currently active instead, which reads as the camera

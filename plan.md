@@ -31,10 +31,11 @@ Node and edge info: title always visible; full details click-to-reveal
 
 11. Search: tagged keywords + universal title search
 
-Spaces, orbits, entities, and relationships can all carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod", an orbit "core", or an entity "billing" so it can be found alongside unrelated objects sharing that tag). This was originally a space/orbit-only concept; it's since been extended to entities, then relationships too — relationships also gained an optional metadata bag alongside tags, same shape as space/orbit/entity's own object-level metadata (distinct from the per-note metadata bag in decision #6, which relationships still don't get)
+Spaces, orbits, entities, and relationships can all carry tags — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod", an orbit "core", or an entity "billing" so it can be found alongside unrelated objects sharing that tag). This was originally a space/orbit-only concept; it's since been extended to entities, then relationships too — relationships also gained an optional metadata bag alongside tags, same shape as space/orbit/entity's own object-level metadata (distinct from the per-note metadata bag in decision #6, which relationships still don't get)
+Tags are normalized: a shared Tag { id, name } registry (a flat Map<id, Tag>, same pattern as every other collection per decision #15) is the single source of truth for tag names, and each space/orbit/entity/relationship stores a tagIds: string[] referencing it rather than duplicating free-typed strings. Editing UI still reads/writes tags by name (TagEditor takes/returns string[] of names) — the store resolves a typed name against the registry on write, reusing an existing tag (matched case-insensitively) or creating a new one, so typing "Billing" and "billing" on two different objects converges on one shared tag rather than two near-duplicates. renameTag(tagId, name) updates that one registry record and every object referencing it picks up the new name for free (no array surgery across objects); deleteTag(tagId) removes the registry entry and strips the id out of every tagIds array that held it, the same "no dangling reference" rule used elsewhere (decision #9)
 Projects, spaces, orbits, and entities are searchable by title/name via a simpler substring/fuzzy match, without needing explicit tagging — relationships are excluded since they have no name field
-Tag search and title search stay conceptually separate (exact-match keyword index vs. fuzzy substring match), but both now cover the same three taggable/nameable object types (space/orbit/entity) plus project for title search
-Planned but not built: a global, user-managed tag list (so tags come from a shared vocabulary/autocomplete rather than free-typed strings per object) to group otherwise-unrelated objects across the project — currently tags are just a plain string[] with no central registry, no rename-tag-everywhere, no autocomplete
+Tag search and title search stay conceptually separate (exact-match keyword index vs. fuzzy substring match), but both now cover the same three taggable/nameable object types (space/orbit/entity) plus project for title search — the tag index itself resolves tagIds through the registry, so a rename is reflected in search immediately. Relationships have tags too but aren't part of tag search yet (no name field to show as a result, no sidebar row) — deliberately deferred, not a gap in the normalization itself
+Planned but not built: a UI for the tag registry itself — autocomplete/typeahead against existing tag names while typing in TagEditor (so users converge on the shared vocabulary instead of relying on the case-insensitive dedup catching near-duplicates after the fact), and a browsable/renameable global tag list. The data-model and store-action groundwork for both (the Tag registry, renameTag, deleteTag) is in place; only the UI surface is still missing
 
 12. Multi-selection via tabs
 
@@ -62,7 +63,7 @@ Project {
 Space {
   id, projectId,             // ← points up to parent Project
   name, label?, origin: Vector3,
-  tags: string[],
+  tagIds: string[],           // ← references the shared Tag registry, not free-typed strings
   notes: Note[],
   metadata?: Record<string, string | number>
 }
@@ -70,14 +71,14 @@ Space {
 Orbit {
   id, spaceId,                // ← points up to parent Space
   name, label?, origin: Vector3,   // local to parent space's origin
-  tags: string[],
+  tagIds: string[],
   notes: Note[],
   metadata?: Record<string, string | number>
 }
 
 Entity {
   id, spaceId, orbitId?,      // ← points up to parent Space, optionally an Orbit
-  name, tags: string[], position: Vector3,  // local to parent space's (or orbit's) origin
+  name, tagIds: string[], position: Vector3,  // local to parent space's (or orbit's) origin
   notes: Note[],
   metadata?: Record<string, string | number>
 }
@@ -85,7 +86,7 @@ Entity {
 Relationship {
   id, sourceId, targetId,     // must differ — no self-relationships; may span different orbits/spaces
   cardinality: "1:1" | "1:N" | "N:M",
-  tags: string[],
+  tagIds: string[],
   notes: Note[],
   metadata?: Record<string, string | number>
 }
@@ -95,11 +96,17 @@ Note {
   metadata?: Record<string, string | number>
 }
 
+Tag {
+  id, name
+}
+
 Entity originally had a fields: Field[] property (Field being { id, name, type, isPK?, isFK? }) modeling database-table columns. That's been removed: a field with no value is a schema declaration, not an attribute of a specific entity instance, which is a narrower assumption (this tool models general entities/relationships, not specifically database schemas — see plan.md's own network-topology example schema under Phase 11) than this tool intends. Entity now carries tags/metadata directly instead, same shape as Space/Orbit.
 
 Project originally had a notes: Note[] property too. That's been removed — notes, tags, and metadata are exclusively a Space/Orbit/Entity/Relationship concept; Project never gets an editing surface for any of them.
 
-Store shape: flat maps per type — projects, spaces, orbits, entities, relationships — each keyed by id. "Children of X" views (e.g. spacesInProject(projectId), entitiesInSpace(spaceId), entitiesInOrbit(orbitId)) are derived by filtering/indexing these maps on demand, optionally backed by a maintained parentId -> Set<childId> index for performance, rather than being a second source of truth to keep in sync.
+tags: string[] was originally stored inline on Space/Orbit/Entity(/Relationship) as free-typed strings, duplicated per object with no shared identity — renaming a tag meant editing it independently everywhere it appeared, and two objects tagging the same concept ("Billing" vs "billing") had no way to be recognized as the same tag. Normalized per decision #11: each of those types now carries tagIds: string[] instead, referencing the flat Tag registry below.
+
+Store shape: flat maps per type — projects, spaces, orbits, entities, relationships, tags — each keyed by id. "Children of X" views (e.g. spacesInProject(projectId), entitiesInSpace(spaceId), entitiesInOrbit(orbitId)) are derived by filtering/indexing these maps on demand, optionally backed by a maintained parentId -> Set<childId> index for performance, rather than being a second source of truth to keep in sync. The tags map is the one collection not scoped under a parent — tags are shared vocabulary across the whole store, not owned by any single project/space/etc.
 
 Validation rules enforced by the API/store layer (not just types):
 
@@ -107,6 +114,7 @@ sourceId !== targetId on relationship creation
 Entity creation always requires a spaceId (and optionally orbitId)
 Deleting a Space cascades: delete the Space record, delete all Orbit/Entity records where spaceId matches, then delete Relationship records where sourceId/targetId matched any deleted entity
 Moving an entity between spaces/orbits is a field update (entity.spaceId = ..., entity.orbitId = ...) — no array surgery, and it never touches Relationship records
+Deleting a Tag cascades the other direction from Space's cascade: the Tag record is removed, then every Space/Orbit/Entity/Relationship whose tagIds included it has that id stripped out — no dangling tagId ever survives in a tagIds array
 An entity's effective world position resolves by walking up: entity.orbitId → orbit.origin (if assigned) + entity.spaceId → space.origin + entity.position
 Loading a project (e.g. for a project list/switcher) requires only Project records — spaces/orbits/entities are pulled in lazily by filtering on projectId once a project is opened, not eagerly nested inside it
 Selection, tabs & search architecture
@@ -160,7 +168,7 @@ Validates label-tier visual hierarchy, orbit hit-testing, relationship persisten
 
 Phase 1 — Core data model (done — the project switcher is a dropdown rather than a dedicated list/grid page, functionally equivalent to what's described below)
 
-Project/Space/Orbit/Entity/Relationship/Note as above, with tags on Space/Orbit/Entity/Relationship
+Project/Space/Orbit/Entity/Relationship/Note/Tag as above, with normalized tagIds on Space/Orbit/Entity/Relationship referencing the shared Tag registry
 Normalized store: flat Map<id, T> per type, parent references point up (Space.projectId, Entity.spaceId/orbitId), no nested child arrays
 Derived "children of X" queries/indices (spacesInProject, entitiesInSpace, entitiesInOrbit) computed from the flat maps, optionally cached via a maintained parentId -> Set<childId> index
 Validation rules: no self-relationships, entities always require a space, cascade delete logic

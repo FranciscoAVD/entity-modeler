@@ -11,7 +11,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { entitiesInProject, projectIdForEntity, relationshipScope } from "@/store/selectors";
+import {
+  entitiesInProject,
+  projectIdForEntity,
+  relationshipScope,
+  tagNamesForIds,
+} from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Cardinality, Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
@@ -199,6 +204,9 @@ function GroupDetails({
 
 function EntityDetails({ entityId }: { entityId: string }) {
   const entity = useModelStore((state) => state.entities.get(entityId));
+  const tagNames = useModelStore(
+    useShallow((state) => (entity ? tagNamesForIds(state, entity.tagIds) : [])),
+  );
   const updateEntityTags = useModelStore((state) => state.updateEntityTags);
   const updateEntityMetadata = useModelStore((state) => state.updateEntityMetadata);
   if (!entity) return null;
@@ -207,6 +215,7 @@ function EntityDetails({ entityId }: { entityId: string }) {
     <GroupDetails
       key={entity.id}
       {...entity}
+      tags={tagNames}
       onUpdateTags={(tags) => updateEntityTags(entity.id, tags)}
       onUpdateMetadata={(metadata) => updateEntityMetadata(entity.id, metadata)}
       noteTargetType="entity"
@@ -217,6 +226,9 @@ function EntityDetails({ entityId }: { entityId: string }) {
 
 function OrbitDetails({ orbitId }: { orbitId: string }) {
   const orbit = useModelStore((state) => state.orbits.get(orbitId));
+  const tagNames = useModelStore(
+    useShallow((state) => (orbit ? tagNamesForIds(state, orbit.tagIds) : [])),
+  );
   const updateOrbitTags = useModelStore((state) => state.updateOrbitTags);
   const updateOrbitMetadata = useModelStore((state) => state.updateOrbitMetadata);
   if (!orbit) return null;
@@ -225,6 +237,7 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
     <GroupDetails
       key={orbit.id}
       {...orbit}
+      tags={tagNames}
       onUpdateTags={(tags) => updateOrbitTags(orbit.id, tags)}
       onUpdateMetadata={(metadata) => updateOrbitMetadata(orbit.id, metadata)}
       noteTargetType="orbit"
@@ -235,6 +248,9 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
 
 function SpaceDetails({ spaceId }: { spaceId: string }) {
   const space = useModelStore((state) => state.spaces.get(spaceId));
+  const tagNames = useModelStore(
+    useShallow((state) => (space ? tagNamesForIds(state, space.tagIds) : [])),
+  );
   const updateSpaceTags = useModelStore((state) => state.updateSpaceTags);
   const updateSpaceMetadata = useModelStore((state) => state.updateSpaceMetadata);
   if (!space) return null;
@@ -243,6 +259,7 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
     <GroupDetails
       key={space.id}
       {...space}
+      tags={tagNames}
       onUpdateTags={(tags) => updateSpaceTags(space.id, tags)}
       onUpdateMetadata={(metadata) => updateSpaceMetadata(space.id, metadata)}
       noteTargetType="space"
@@ -265,6 +282,9 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   );
   const projectEntities = useModelStore(
     useShallow((state) => (projectId ? entitiesInProject(state, projectId) : [])),
+  );
+  const tagNames = useModelStore(
+    useShallow((state) => (relationship ? tagNamesForIds(state, relationship.tagIds) : [])),
   );
   const deleteRelationship = useModelStore((state) => state.deleteRelationship);
   const updateRelationshipCardinality = useModelStore(
@@ -356,16 +376,16 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
               </SelectContent>
             </Select>
             <TagEditor
-              tags={relationship.tags}
+              tags={tagNames}
               onUpdate={(tags) => updateRelationshipTags(relationshipId, tags)}
             />
           </div>
         ) : (
           <>
             <p className="text-muted-foreground text-sm">Cardinality: {relationship.cardinality}</p>
-            {relationship.tags.length > 0 && (
+            {tagNames.length > 0 && (
               <div className="flex flex-wrap gap-1">
-                {relationship.tags.map((tag) => (
+                {tagNames.map((tag) => (
                   <Badge key={tag} variant="secondary" className="capitalize">
                     {tag}
                   </Badge>
