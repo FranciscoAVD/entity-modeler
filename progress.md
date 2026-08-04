@@ -1,7 +1,7 @@
 # Progress recap
 
 Status as of 2026-08-03. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
-`server` Bun+Hono, unused so far). 79 tests passing, build/lint clean. Full
+`server` Bun+Hono, unused so far). 80 tests passing, build/lint clean. Full
 plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
 9 → 10 → 11`.
 
@@ -297,13 +297,14 @@ both, only the UI was missing.
   rather than adding an origin field to `CreateDialog` in this pass.
 
 **Phase 8 (part 2) — Notes, tags & metadata editing UI** (`client/src/scene/TagEditor.tsx`,
-`MetadataEditor.tsx`, `NoteDialog.tsx`, `InfoPanel.tsx`, `client/src/store/store.ts`,
-`types.ts`, `seed.ts`)
+`MetadataEditor.tsx`, `MetadataTable.tsx`, `NoteDialog.tsx`, `InfoPanel.tsx`,
+`client/src/store/store.ts`, `types.ts`, `seed.ts`)
 Closes out Phase 8's remaining pieces except repositioning (still deferred, see TODO).
 Three separate editing surfaces per explicit user direction ("notes editing is separate
 from tag/metadata editing"), scoped to Space/Orbit/Entity for tags/metadata and
 Space/Orbit/Entity/Relationship for notes — Relationship has no `tags`/`metadata` fields
-in the data model, so it only gets note editing.
+in the data model, so it only gets note editing. Went through several rounds of UI
+iteration on top of the initial version; the bullets below describe where each landed.
 - `TagEditor.tsx`/`MetadataEditor.tsx`: presentational, no store coupling — each takes
   the current value plus an `onUpdate` callback, so `InfoPanel.tsx`'s `EntityDetails`/
   `OrbitDetails`/`SpaceDetails` (which already fetch their own record) are the ones that
@@ -312,13 +313,46 @@ in the data model, so it only gets note editing.
   division of responsibility it already had. Metadata values are always written back as
   strings from the editor's text input (a plain scope simplification — a value typed
   through the UI can't stay a `number`; only seed-set values do).
-- A note's own optional `metadata` bag (plan.md's CIDR/VLAN example) stays read-only —
-  the add/edit note dialog (`NoteDialog.tsx`, modeled on `CreateDialog.tsx`'s
-  reused-instance/resync-on-open pattern) is just title + text. `MetadataTable` (the
-  read-only renderer) is unchanged, now used only for that.
-- `NoteList` in `InfoPanel.tsx` gained `targetType`/`targetId` props, an "Add note"
-  button, and per-note edit/delete icon buttons (delete reuses `DeleteConfirmDialog`
-  from part 1). It no longer early-returns `null` on an empty `notes` array, since the
+- **Editing is off by default.** `GroupDetails` gained a pencil/check toggle button next
+  to the object's name (`editing` state); read-only tag badges and `MetadataTable` show
+  by default, swapping to `TagEditor`/`MetadataEditor` only once toggled. Each
+  `EntityDetails`/`OrbitDetails`/`SpaceDetails` call site keys its `GroupDetails` by the
+  object's id so switching to a different object resets the toggle back to read-only
+  rather than carrying edit-mode across (React doesn't remount on a prop change alone,
+  only a `key` change).
+- `TagEditor.tsx` UI iteration: the remove-tag `X` shrank to `size-2.5` (the badge CSS
+  otherwise forces `size-3!`, so overriding needed a matching `!` important-marker
+  class), and only turns `text-destructive` **on hover** — an earlier pass that also
+  dimmed its default color to `text-muted-foreground` was reverted per feedback ("the
+  original dark text was fine"). The "add tag" input moved out of the chip row onto its
+  own line below (`mt-1` added only when chips exist, via `cn()`).
+- `MetadataEditor.tsx` gained full edit capability, not just add/remove: each row now
+  gets `Pencil`/`Trash2` buttons (matching `NoteList`'s icon language) — clicking Pencil
+  swaps that row's key/value cells for inline `Input`s with `Check`/`X` to save/cancel
+  (Enter/Escape as shortcuts). Renaming a key is a delete-old + set-new, since a metadata
+  bag has no meaningful order to preserve. Row hover started as a whole-row
+  `bg-destructive/10` tint (when delete was the only action) but was walked back to a
+  neutral `hover:bg-accent/10` once edit was added — a red row now reads ambiguously
+  when hovering could mean either action, so only the `Trash2` button itself keeps
+  `hover:text-destructive`.
+- Tags and metadata keys both get `capitalize` (CSS `text-transform`, display-only —
+  stored values are untouched) for visual consistency, applied at every render site
+  (`TagEditor`, `GroupDetails`' read-only badges, `MetadataEditor`, `MetadataTable`).
+- **Notes: view/add/edit consolidated into one dialog.** Note text in the list now
+  clips to `line-clamp-6` with a `hover:bg-accent/10` row and click-to-open; this
+  started as a *second*, read-only "view full note" dialog alongside the existing
+  edit dialog, but per feedback ("editing a note also opens a dialog, let's move the
+  editing feature into the dialog") the two were merged into a single `NoteDialog.tsx`:
+  a brand-new note ("new") opens straight into the edit form (title `Input` + text
+  `Textarea`); an existing note opens read-only (full text, author, metadata) with a
+  pencil toggle into that same form, Save returning to the view rather than closing.
+  The row's separate Pencil button was removed as redundant once clicking the note
+  itself opens the same dialog; the row's `Trash2` (delete, own confirm dialog) is
+  unaffected. `MetadataTable` (used both for this and for `GroupDetails`' read-only
+  metadata) was extracted out of `InfoPanel.tsx` into its own `MetadataTable.tsx` to
+  avoid a circular import once `NoteDialog.tsx` needed it too.
+- `NoteList` in `InfoPanel.tsx` gained `targetType`/`targetId` props and an "Add note"
+  button, and no longer early-returns `null` on an empty `notes` array, since the
   header + add button need to render even with zero notes.
 - `addNote`/`updateNote`/`deleteNote` in `store.ts` were unified onto a shared
   `notesPatch`/`withNotes` helper (look up the record by `targetType`, replace its
@@ -332,6 +366,39 @@ in the data model, so it only gets note editing.
   plan.md's data model, decision #6, the stale "Project-level notes have no UI yet" note,
   and the now-resolved "Delete and move-entity UI" open question (part 1's work) were all
   updated in the same pass.
+
+**InfoPanel layout: `PanelSection` wrapper + full-bleed row hover** (not a plan.md phase
+— UI polish, `client/src/scene/InfoPanel.tsx`, `MetadataEditor.tsx`)
+`InfoPanel`'s own padding (`p-3`) was removed in favor of a `py-3`-only outer container
+plus a small `PanelSection` wrapper (`px-3`) that everything opts into individually —
+motivated by wanting the Notes section's per-note hover background, and later
+`MetadataEditor`'s per-row hover, to span the *entire* panel width rather than stopping
+at wherever the panel's own padding was. `NoteList` and (only while editing)
+`MetadataEditor` sit as unpadded siblings of `PanelSection` so their outer hoverable
+rows reach the panel edges, while their own inner content carries matching `px-3`/`pl-3`
+so text still lines up with everything else in `PanelSection`.
+
+**Recently-viewed picker moved from the side panel into the Header** (not a plan.md
+phase — layout tweak, `client/src/scene/Header.tsx`, `TabBar.tsx`, `SidePanel.tsx`)
+`TabBar` (the recency-capped `Select`, see decision #12) now renders inline in `Header`
+between the project switcher and "Reset view," rather than docked above `InfoPanel` in
+`SidePanel` — it's a navigation control, not part of the details being viewed. Lost its
+own bordered/padded wrapper (`border-b p-2`) and fixed width (`w-56`) to fit the
+header's flex row instead of a full-width docked panel.
+
+**Close button on the side panel** (not a plan.md phase — small UX gap,
+`client/src/store/store.ts`, `client/src/scene/SidePanel.tsx`, `plan.md`)
+New store action `clearActiveTab()` sets `activeTabId: null` without touching
+`openTabs` — deliberately distinct from plan.md decision #12's "no manual close,"
+which is about the recency *history*, not the panel's visibility. `SidePanel` now
+gates on `activeTabId !== null` instead of `openTabs.length > 0` (previously the two
+were always equivalent in practice, since `activeTabId` only ever went `null` when
+`openTabs` also emptied out via cascade delete — this is the first path that
+deliberately decouples them) and renders a small bordered header row with an `X`
+button above `InfoPanel`. Closing leaves the tab history intact, so the Header's
+"Recently viewed" select can still reopen the same tab afterward. plan.md's decision
+#12 gained a clarifying sentence so this doesn't read as contradicting "no manual
+close."
 
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)

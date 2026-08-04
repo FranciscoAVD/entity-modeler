@@ -115,7 +115,7 @@ openTabs: { id, type: "entity" | "relationship" | "orbit" | "space" }[] — a re
 activeTabId: string | null
 A single click on a node/edge/orbit/space in the 3D scene only moves the camera (via the same focusOn/focusTarget mechanism a sidebar row click uses) — it does not add a tab. Double-clicking adds it to openTabs (moving it to most-recent if already present) and makes it active
 Making a tab active triggers an animated camera fly-to centered on that object
-There's no manual "close" — an entry only leaves openTabs early if its underlying object is deleted (cascade), in which case the next remaining tab (or none) becomes active; otherwise it just ages out once 5 newer objects have been viewed
+There's no manual "close" of the openTabs history itself — an entry only leaves openTabs early if its underlying object is deleted (cascade), in which case the next remaining tab (or none) becomes active; otherwise it just ages out once 5 newer objects have been viewed. The side panel's own visibility is a separate concern: a close button clears activeTabId (clearActiveTab) without touching openTabs, so the panel can be dismissed and later reopened at the same point via the Header's "Recently viewed" select
 A separate "reset view" action clears camera focus and flies to a default overview position, without necessarily affecting openTabs
 
 Search

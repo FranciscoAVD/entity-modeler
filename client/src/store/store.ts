@@ -90,6 +90,7 @@ export interface ModelActions {
 
   openTab(id: string, type: TabType): void;
   setActiveTab(id: string): void;
+  clearActiveTab(): void;
 }
 
 // Recently-viewed history is capped rather than a user-managed open/close list — the sidebar's
@@ -521,5 +522,11 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     if (!state.openTabs.some((t) => t.id === id)) throw new Error(`Tab not open: ${id}`);
     set({ activeTabId: id });
+  },
+
+  // Closes the panel without touching openTabs — per plan.md decision #12, there's no manual
+  // "close" of the recency history itself, only of which tab (if any) is currently active.
+  clearActiveTab() {
+    set({ activeTabId: null });
   },
 }));

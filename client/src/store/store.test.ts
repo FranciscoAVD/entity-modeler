@@ -368,6 +368,18 @@ describe("tabs", () => {
     expect(state.openTabs).toEqual([]);
     expect(state.activeTabId).toBeNull();
   });
+
+  it("clearActiveTab deactivates without touching openTabs", () => {
+    const { openTab, clearActiveTab } = useModelStore.getState();
+    openTab("a", "entity");
+    openTab("b", "entity");
+
+    clearActiveTab();
+
+    const state = useModelStore.getState();
+    expect(state.activeTabId).toBeNull();
+    expect(state.openTabs.map((t) => t.id)).toEqual(["a", "b"]);
+  });
 });
 
 describe("search", () => {
