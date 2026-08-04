@@ -100,11 +100,12 @@ export function seedDemoProject(): string {
     sourceId: ungroupedNode,
     targetId: remoteNode,
     cardinality: "N:M",
+    tags: ["vpn"],
+    metadata: { cidr: "10.0.4.0/24", vlan: 12 },
   }); // cross-space
   addNote("relationship", crossSpaceRel, {
     title: "Network path",
     text: "Routed over the site-to-site VPN subnet. Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur.",
-    metadata: { cidr: "10.0.4.0/24", vlan: 12 },
   });
   addNote("relationship", crossSpaceRel, {
     title: "Change history",

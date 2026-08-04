@@ -1,11 +1,19 @@
 import { ArrowRight, ArrowRightLeft, Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { relationshipScope } from "@/store/selectors";
+import { entitiesInProject, projectIdForEntity, relationshipScope } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Note, NoteTargetType } from "@/store/types";
+import type { Cardinality, Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { MetadataEditor } from "./MetadataEditor";
 import { MetadataTable } from "./MetadataTable";
@@ -252,8 +260,21 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
     relationship ? state.entities.get(relationship.targetId)?.name : undefined,
   );
   const scope = useModelStore((state) => relationshipScope(state, relationshipId));
+  const projectId = useModelStore((state) =>
+    relationship ? projectIdForEntity(state, relationship.sourceId) : undefined,
+  );
+  const projectEntities = useModelStore(
+    useShallow((state) => (projectId ? entitiesInProject(state, projectId) : [])),
+  );
   const deleteRelationship = useModelStore((state) => state.deleteRelationship);
+  const updateRelationshipCardinality = useModelStore(
+    (state) => state.updateRelationshipCardinality,
+  );
+  const updateRelationshipEndpoints = useModelStore((state) => state.updateRelationshipEndpoints);
+  const updateRelationshipTags = useModelStore((state) => state.updateRelationshipTags);
+  const updateRelationshipMetadata = useModelStore((state) => state.updateRelationshipMetadata);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   if (!relationship) return null;
 
@@ -261,19 +282,106 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   // "Add relationship" action; 1:1/1:N stay a single directional arrow, source to target.
   const CardinalityIcon = relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
 
+  // Picking an entity already on the other end swaps the two rather than leaving an invalid
+  // (or silently rejected) same-entity pair — mirrors AddRelationshipDialog's source-change guard.
+  const handleSourceChange = (sourceId: string) => {
+    const targetId = sourceId === relationship.targetId ? relationship.sourceId : relationship.targetId;
+    updateRelationshipEndpoints(relationshipId, { sourceId, targetId });
+  };
+  const handleTargetChange = (targetId: string) => {
+    const sourceId = targetId === relationship.sourceId ? relationship.targetId : relationship.sourceId;
+    updateRelationshipEndpoints(relationshipId, { sourceId, targetId });
+  };
+
   return (
     <div className="space-y-3">
       <PanelSection>
-        <h3
-          className="flex items-center gap-2 text-xl font-semibold"
-          style={{ color: EDGE_STYLES[scope].color }}
-        >
-          <span className="min-w-0 truncate">{sourceName ?? "?"}</span>
-          <CardinalityIcon className="size-5 shrink-0" />
-          <span className="min-w-0 truncate">{targetName ?? "?"}</span>
-        </h3>
-        <p className="text-muted-foreground text-sm">Cardinality: {relationship.cardinality}</p>
+        <div className="flex items-center justify-between gap-2">
+          <h3
+            className="flex min-w-0 items-center gap-2 text-xl font-semibold"
+            style={{ color: EDGE_STYLES[scope].color }}
+          >
+            <span className="min-w-0 truncate">{sourceName ?? "?"}</span>
+            <CardinalityIcon className="size-5 shrink-0" />
+            <span className="min-w-0 truncate">{targetName ?? "?"}</span>
+          </h3>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={() => setEditing((e) => !e)}
+            aria-label={editing ? "Done editing relationship" : "Edit relationship"}
+          >
+            {editing ? <Check /> : <Pencil />}
+          </Button>
+        </div>
+        {editing ? (
+          <div className="space-y-1.5">
+            <Select value={relationship.sourceId} onValueChange={handleSourceChange}>
+              <SelectTrigger className="h-7 w-full text-sm">
+                <SelectValue placeholder="Source entity" />
+              </SelectTrigger>
+              <SelectContent>
+                {projectEntities.map((entity) => (
+                  <SelectItem key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={relationship.targetId} onValueChange={handleTargetChange}>
+              <SelectTrigger className="h-7 w-full text-sm">
+                <SelectValue placeholder="Target entity" />
+              </SelectTrigger>
+              <SelectContent>
+                {projectEntities.map((entity) => (
+                  <SelectItem key={entity.id} value={entity.id}>
+                    {entity.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select
+              value={relationship.cardinality}
+              onValueChange={(value) =>
+                updateRelationshipCardinality(relationshipId, value as Cardinality)
+              }
+            >
+              <SelectTrigger className="h-7 w-24 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1:1">1:1</SelectItem>
+                <SelectItem value="1:N">1:N</SelectItem>
+                <SelectItem value="N:M">N:M</SelectItem>
+              </SelectContent>
+            </Select>
+            <TagEditor
+              tags={relationship.tags}
+              onUpdate={(tags) => updateRelationshipTags(relationshipId, tags)}
+            />
+          </div>
+        ) : (
+          <>
+            <p className="text-muted-foreground text-sm">Cardinality: {relationship.cardinality}</p>
+            {relationship.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {relationship.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="capitalize">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {relationship.metadata && <MetadataTable metadata={relationship.metadata} />}
+          </>
+        )}
       </PanelSection>
+      {editing && (
+        <MetadataEditor
+          metadata={relationship.metadata}
+          onUpdate={(metadata) => updateRelationshipMetadata(relationshipId, metadata)}
+        />
+      )}
       <NoteList targetType="relationship" targetId={relationshipId} notes={relationship.notes} />
       <PanelSection>
         <Button variant="destructive" size="sm" onClick={() => setConfirmOpen(true)}>

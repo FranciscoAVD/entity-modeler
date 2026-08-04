@@ -79,6 +79,70 @@ describe("relationships", () => {
   });
 });
 
+describe("updateRelationshipCardinality", () => {
+  it("replaces the cardinality without touching sourceId/targetId/notes", () => {
+    const { addEntity, addRelationship, updateRelationshipCardinality } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const source = addEntity({ spaceId, name: "Source" });
+    const target = addEntity({ spaceId, name: "Target" });
+    const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:1" });
+
+    updateRelationshipCardinality(relId, "N:M");
+
+    const relationship = useModelStore.getState().relationships.get(relId);
+    expect(relationship?.cardinality).toBe("N:M");
+    expect(relationship?.sourceId).toBe(source);
+    expect(relationship?.targetId).toBe(target);
+  });
+
+  it("throws for a missing relationship", () => {
+    const { updateRelationshipCardinality } = useModelStore.getState();
+    expect(() => updateRelationshipCardinality("missing", "N:M")).toThrow();
+  });
+});
+
+describe("updateRelationshipEndpoints", () => {
+  it("re-points the relationship at a new source/target pair", () => {
+    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const c = addEntity({ spaceId, name: "C" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    updateRelationshipEndpoints(relId, { sourceId: a, targetId: c });
+
+    const relationship = useModelStore.getState().relationships.get(relId);
+    expect(relationship?.sourceId).toBe(a);
+    expect(relationship?.targetId).toBe(c);
+  });
+
+  it("rejects making source and target the same entity", () => {
+    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(() => updateRelationshipEndpoints(relId, { sourceId: a, targetId: a })).toThrow();
+  });
+
+  it("throws for a missing relationship or entity", () => {
+    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(() =>
+      updateRelationshipEndpoints("missing", { sourceId: a, targetId: b }),
+    ).toThrow();
+    expect(() =>
+      updateRelationshipEndpoints(relId, { sourceId: a, targetId: "missing" }),
+    ).toThrow();
+  });
+});
+
 describe("moveEntity", () => {
   it("preserves world position when moving into a space with a different origin", () => {
     const { addProject, addSpace, addEntity, moveEntity } = useModelStore.getState();
@@ -188,6 +252,37 @@ describe("tags and metadata", () => {
     expect(() => updateEntityTags("missing", ["x"])).toThrow();
     expect(() => updateOrbitMetadata("missing", { a: 1 })).toThrow();
   });
+
+  it("addRelationship accepts tags/metadata, and updateRelationshipTags/Metadata replace them", () => {
+    const { addEntity, addRelationship, updateRelationshipTags, updateRelationshipMetadata } =
+      useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({
+      sourceId: a,
+      targetId: b,
+      cardinality: "1:1",
+      tags: ["vpn"],
+      metadata: { vlan: 12 },
+    });
+
+    expect(useModelStore.getState().relationships.get(relId)?.tags).toEqual(["vpn"]);
+    expect(useModelStore.getState().relationships.get(relId)?.metadata).toEqual({ vlan: 12 });
+
+    updateRelationshipTags(relId, ["vpn", "cross-space"]);
+    updateRelationshipMetadata(relId, undefined);
+
+    const relationship = useModelStore.getState().relationships.get(relId);
+    expect(relationship?.tags).toEqual(["vpn", "cross-space"]);
+    expect(relationship?.metadata).toBeUndefined();
+  });
+
+  it("updateRelationshipTags/Metadata throw for an unknown relationship", () => {
+    const { updateRelationshipTags, updateRelationshipMetadata } = useModelStore.getState();
+    expect(() => updateRelationshipTags("missing", ["x"])).toThrow();
+    expect(() => updateRelationshipMetadata("missing", { a: 1 })).toThrow();
+  });
 });
 
 describe("notes", () => {
@@ -225,6 +320,31 @@ describe("notes", () => {
   it("throws for an unknown target", () => {
     const { addNote } = useModelStore.getState();
     expect(() => addNote("entity", "missing", { title: "T", text: "X" })).toThrow();
+  });
+
+  it("rejects metadata on a relationship note", () => {
+    const { addEntity, addRelationship, addNote } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const a = addEntity({ spaceId, name: "A" });
+    const b = addEntity({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+
+    expect(() =>
+      addNote("relationship", relId, { title: "Path", text: "Direct", metadata: { vlan: 12 } }),
+    ).toThrow();
+  });
+
+  it("allows metadata on a space/orbit/entity note", () => {
+    const { addEntity, addNote } = useModelStore.getState();
+    const { spaceId } = seedProjectSpace();
+    const entityId = addEntity({ spaceId, name: "Node" });
+
+    const noteId = addNote("entity", entityId, {
+      title: "Config",
+      text: "Details",
+      metadata: { version: "1.0" },
+    });
+    expect(useModelStore.getState().entities.get(entityId)?.notes[0]?.id).toBe(noteId);
   });
 });
 

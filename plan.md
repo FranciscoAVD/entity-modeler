@@ -19,7 +19,7 @@ Node and edge info: title always visible; full details click-to-reveal
 
 5. Data model is separate from the renderer Project/Space/Orbit/Entity/Relationship/Note live in a plain data structure; the three.js scene is one view over that data. This gives undo/redo, JSON export, and alternate render targets (e.g. flattened 2D export) without touching core logic.
 
-6. Notes: freeform + optional structured metadata, at four levels Space, Orbit, Entity, and Relationship all carry independent notes[] — this originally included Project too, but notes (and tags/metadata generally) are exclusively a Space/Orbit/Entity(/Relationship, for notes only) concept, so Project never gets one. Each note is primarily free text, with an optional metadata bag for structured cases (e.g. an edge representing a subnet: { cidr: "10.0.4.0/24", vlan: 12 }), rendered as a small key-value table alongside the prose — this bag is read-only in the UI (set via seed data only), separate from the object-level tags/metadata editing described in decision #11 and Phase 8. Same shape, same rendering path at every level.
+6. Notes: freeform + optional structured metadata, at four levels Space, Orbit, Entity, and Relationship all carry independent notes[] — this originally included Project too, but notes are exclusively a Space/Orbit/Entity/Relationship concept, so Project never gets one. Each note is primarily free text; Space/Orbit/Entity notes additionally support an optional per-note metadata bag for structured cases (e.g. a space representing a subnet: { cidr: "10.0.4.0/24", vlan: 12 }), rendered as a small key-value table alongside the prose — this bag is read-only in the UI (set via seed data only), separate from the object-level tags/metadata editing described in decision #11 and Phase 8. Relationship notes are prose-only — no per-note metadata bag, enforced at creation time (addNote throws if a relationship note is given metadata); a relationship's own object-level metadata (decision #11) is the place for that kind of structured data instead.
 
 7. Relationships can cross spaces and orbits, and survive entity moves sourceId/targetId reference entities globally by id. If an entity moves to a different space or orbit, its relationships are never severed or auto-deleted — they simply re-render with updated styling (e.g. an edge that was intra-space may become cross-space after a move). Relationship lifetime is tied only to its own existence, not to its endpoints' current location.
 
@@ -31,7 +31,7 @@ Node and edge info: title always visible; full details click-to-reveal
 
 11. Search: tagged keywords + universal title search
 
-Spaces, orbits, and entities can all carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod", an orbit "core", or an entity "billing" so it can be found alongside unrelated objects sharing that tag). This was originally a space/orbit-only concept; it's since been extended to entities too
+Spaces, orbits, entities, and relationships can all carry a tags: string[] field — user-defined keywords, indexed separately for fast lookup (e.g. tagging a space "prod", an orbit "core", or an entity "billing" so it can be found alongside unrelated objects sharing that tag). This was originally a space/orbit-only concept; it's since been extended to entities, then relationships too — relationships also gained an optional metadata bag alongside tags, same shape as space/orbit/entity's own object-level metadata (distinct from the per-note metadata bag in decision #6, which relationships still don't get)
 Projects, spaces, orbits, and entities are searchable by title/name via a simpler substring/fuzzy match, without needing explicit tagging — relationships are excluded since they have no name field
 Tag search and title search stay conceptually separate (exact-match keyword index vs. fuzzy substring match), but both now cover the same three taggable/nameable object types (space/orbit/entity) plus project for title search
 Planned but not built: a global, user-managed tag list (so tags come from a shared vocabulary/autocomplete rather than free-typed strings per object) to group otherwise-unrelated objects across the project — currently tags are just a plain string[] with no central registry, no rename-tag-everywhere, no autocomplete
@@ -85,7 +85,9 @@ Entity {
 Relationship {
   id, sourceId, targetId,     // must differ — no self-relationships; may span different orbits/spaces
   cardinality: "1:1" | "1:N" | "N:M",
-  notes: Note[]
+  tags: string[],
+  notes: Note[],
+  metadata?: Record<string, string | number>
 }
 
 Note {
@@ -95,7 +97,7 @@ Note {
 
 Entity originally had a fields: Field[] property (Field being { id, name, type, isPK?, isFK? }) modeling database-table columns. That's been removed: a field with no value is a schema declaration, not an attribute of a specific entity instance, which is a narrower assumption (this tool models general entities/relationships, not specifically database schemas — see plan.md's own network-topology example schema under Phase 11) than this tool intends. Entity now carries tags/metadata directly instead, same shape as Space/Orbit.
 
-Project originally had a notes: Note[] property too. That's been removed — notes (and tags/metadata generally) are exclusively a Space/Orbit/Entity(/Relationship, for notes only) concept; Project never gets an editing surface for any of them.
+Project originally had a notes: Note[] property too. That's been removed — notes, tags, and metadata are exclusively a Space/Orbit/Entity/Relationship concept; Project never gets an editing surface for any of them.
 
 Store shape: flat maps per type — projects, spaces, orbits, entities, relationships — each keyed by id. "Children of X" views (e.g. spacesInProject(projectId), entitiesInSpace(spaceId), entitiesInOrbit(orbitId)) are derived by filtering/indexing these maps on demand, optionally backed by a maintained parentId -> Set<childId> index for performance, rather than being a second source of truth to keep in sync.
 
@@ -128,7 +130,7 @@ Object	Always visible	Revealed on click	Empty-state treatment
 Space	name/label, tint boundary	notes, metadata, tags	dashed/low-opacity boundary, min size floor
 Orbit	name/label (dimmer), tint boundary	notes, metadata, tags	same as space, nested inside it
 Entity	title only, offset-billboarded sphere	notes, metadata, tags	n/a (entities aren't containers)
-Relationship	title only (if present)	cardinality, notes, metadata	n/a
+Relationship	title only (if present)	cardinality, notes, tags, metadata	n/a
 Click-to-reveal / tab architecture
 
 Hit detection (raycasting)
@@ -158,7 +160,7 @@ Validates label-tier visual hierarchy, orbit hit-testing, relationship persisten
 
 Phase 1 — Core data model (done — the project switcher is a dropdown rather than a dedicated list/grid page, functionally equivalent to what's described below)
 
-Project/Space/Orbit/Entity/Relationship/Note as above, with tags on Space/Orbit/Entity
+Project/Space/Orbit/Entity/Relationship/Note as above, with tags on Space/Orbit/Entity/Relationship
 Normalized store: flat Map<id, T> per type, parent references point up (Space.projectId, Entity.spaceId/orbitId), no nested child arrays
 Derived "children of X" queries/indices (spacesInProject, entitiesInSpace, entitiesInOrbit) computed from the flat maps, optionally cached via a maintained parentId -> Set<childId> index
 Validation rules: no self-relationships, entities always require a space, cascade delete logic

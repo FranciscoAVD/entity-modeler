@@ -54,7 +54,18 @@ export interface ModelActions {
     position?: Vector3;
     metadata?: Record<string, string | number>;
   }): string;
-  addRelationship(input: { sourceId: string; targetId: string; cardinality: Cardinality }): string;
+  addRelationship(input: {
+    sourceId: string;
+    targetId: string;
+    cardinality: Cardinality;
+    tags?: string[];
+    metadata?: Record<string, string | number>;
+  }): string;
+  updateRelationshipCardinality(relationshipId: string, cardinality: Cardinality): void;
+  updateRelationshipEndpoints(
+    relationshipId: string,
+    endpoints: { sourceId: string; targetId: string },
+  ): void;
 
   moveEntity(entityId: string, target: { spaceId: string; orbitId?: string }): void;
   updateEntityPosition(entityId: string, position: Vector3): void;
@@ -65,9 +76,14 @@ export interface ModelActions {
   updateSpaceTags(spaceId: string, tags: string[]): void;
   updateOrbitTags(orbitId: string, tags: string[]): void;
   updateEntityTags(entityId: string, tags: string[]): void;
+  updateRelationshipTags(relationshipId: string, tags: string[]): void;
   updateSpaceMetadata(spaceId: string, metadata: Record<string, string | number> | undefined): void;
   updateOrbitMetadata(orbitId: string, metadata: Record<string, string | number> | undefined): void;
   updateEntityMetadata(entityId: string, metadata: Record<string, string | number> | undefined): void;
+  updateRelationshipMetadata(
+    relationshipId: string,
+    metadata: Record<string, string | number> | undefined,
+  ): void;
 
   deleteProject(projectId: string): void;
   deleteSpace(spaceId: string): void;
@@ -234,7 +250,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     return id;
   },
 
-  addRelationship({ sourceId, targetId, cardinality }) {
+  addRelationship({ sourceId, targetId, cardinality, tags, metadata }) {
     if (sourceId === targetId) throw new Error("A relationship cannot connect an entity to itself");
 
     const state = get();
@@ -243,9 +259,41 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
     const id = crypto.randomUUID();
     const relationships = new Map(state.relationships);
-    relationships.set(id, { id, sourceId, targetId, cardinality, notes: [] });
+    relationships.set(id, {
+      id,
+      sourceId,
+      targetId,
+      cardinality,
+      tags: tags ?? [],
+      notes: [],
+      metadata,
+    });
     set({ relationships });
     return id;
+  },
+
+  updateRelationshipCardinality(relationshipId, cardinality) {
+    const state = get();
+    const relationship = state.relationships.get(relationshipId);
+    if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+
+    const relationships = new Map(state.relationships);
+    relationships.set(relationshipId, { ...relationship, cardinality });
+    set({ relationships });
+  },
+
+  updateRelationshipEndpoints(relationshipId, { sourceId, targetId }) {
+    if (sourceId === targetId) throw new Error("A relationship cannot connect an entity to itself");
+
+    const state = get();
+    const relationship = state.relationships.get(relationshipId);
+    if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+    if (!state.entities.has(sourceId)) throw new Error(`Entity not found: ${sourceId}`);
+    if (!state.entities.has(targetId)) throw new Error(`Entity not found: ${targetId}`);
+
+    const relationships = new Map(state.relationships);
+    relationships.set(relationshipId, { ...relationship, sourceId, targetId });
+    set({ relationships });
   },
 
   moveEntity(entityId, { spaceId, orbitId }) {
@@ -345,6 +393,16 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     set({ entities });
   },
 
+  updateRelationshipTags(relationshipId, tags) {
+    const state = get();
+    const relationship = state.relationships.get(relationshipId);
+    if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+
+    const relationships = new Map(state.relationships);
+    relationships.set(relationshipId, { ...relationship, tags });
+    set({ relationships });
+  },
+
   updateSpaceMetadata(spaceId, metadata) {
     const state = get();
     const space = state.spaces.get(spaceId);
@@ -373,6 +431,16 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const entities = new Map(state.entities);
     entities.set(entityId, { ...entity, metadata });
     set({ entities });
+  },
+
+  updateRelationshipMetadata(relationshipId, metadata) {
+    const state = get();
+    const relationship = state.relationships.get(relationshipId);
+    if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+
+    const relationships = new Map(state.relationships);
+    relationships.set(relationshipId, { ...relationship, metadata });
+    set({ relationships });
   },
 
   deleteProject(projectId) {
@@ -481,6 +549,13 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   },
 
   addNote(targetType, targetId, note) {
+    // Relationship notes are prose-only — no structured metadata bag (unlike Space/Orbit/Entity
+    // notes), since a relationship has no natural place for the kind of structured data
+    // (subnet CIDR/VLAN, etc.) that bag exists for.
+    if (targetType === "relationship" && note.metadata !== undefined) {
+      throw new Error("Relationship notes cannot carry metadata");
+    }
+
     const id = crypto.randomUUID();
     const fullNote: Note = {
       id,

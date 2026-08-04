@@ -37,6 +37,12 @@ export function entitiesInProject(state: ModelState, projectId: string): Entity[
   return [...state.entities.values()].filter((e) => spaceIds.has(e.spaceId));
 }
 
+export function projectIdForEntity(state: ModelState, entityId: string): string | undefined {
+  const entity = state.entities.get(entityId);
+  if (!entity) return undefined;
+  return state.spaces.get(entity.spaceId)?.projectId;
+}
+
 export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
   const entityIds = new Set(entitiesInProject(state, projectId).map((e) => e.id));
   return [...state.relationships.values()].filter(

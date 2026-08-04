@@ -60,7 +60,9 @@ export interface Relationship {
   sourceId: string;
   targetId: string;
   cardinality: Cardinality;
+  tags: string[];
   notes: Note[];
+  metadata?: Record<string, string | number>;
 }
 
 export type TabType = "entity" | "relationship" | "orbit" | "space";

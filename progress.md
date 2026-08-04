@@ -400,6 +400,55 @@ button above `InfoPanel`. Closing leaves the tab history intact, so the Header's
 #12 gained a clarifying sentence so this doesn't read as contradicting "no manual
 close."
 
+**InfoPanel polish: typography, type-colored titles, cardinality-aware relationship
+rendering, and a real relationship edit mode** (not a plan.md phase — UI polish +
+data-model extension, `client/src/scene/InfoPanel.tsx`, `RelationshipEdge.tsx`,
+`components/ui/badge.tsx`, `MetadataTable.tsx`, `MetadataEditor.tsx`, `TagEditor.tsx`,
+`NoteDialog.tsx`, `client/src/store/store.ts`, `selectors.ts`, `types.ts`, `seed.ts`,
+`plan.md`)
+- Text floor raised from `text-xs` to `text-sm` across every InfoPanel-scoped surface
+  (notes, tags, metadata editing) — including `Badge` (bumped `h-5`→`h-6` to fit),
+  which is only ever used from this surface. Hierarchy is now carried by weight/case/
+  color (uppercase section labels, muted dates/authors) rather than a smaller size.
+  Titles bumped to `text-xl`.
+- Space/orbit/entity titles are now colored by their type (`text-space`/`text-orbit`/
+  `text-entity`, the existing sidebar-icon hues). Relationships have no fixed per-type
+  hue, so their title is colored by scope instead (local/cross-orbit/cross-space),
+  reusing `RelationshipEdge.tsx`'s `EDGE_STYLES` (now exported) — the title matches
+  whatever color the edge itself renders as in the 3D scene.
+- The relationship title's `→` is now a real icon that depends on cardinality:
+  `ArrowRightLeft` (the same icon as the sidebar's "Add relationship" action) for N:M,
+  since it's the one inherently-bidirectional cardinality; `ArrowRight` for 1:1/1:N.
+  `RelationshipEdge.tsx` grew matching two-way arrowheads (cone meshes oriented off
+  each end's curve tangent) rendered only for N:M edges in the 3D scene itself.
+- **Relationship edit mode, previously missing entirely.** `RelationshipDetails` gained
+  the same pencil/check toggle pattern as `GroupDetails`, positioned next to the title
+  (an earlier pass had incorrectly put it next to the cardinality line instead — fixed
+  to match). Editing now covers: cardinality (`Select`), and — new — source/target
+  entity (`Select`s scoped to the relationship's project via a new `projectIdForEntity`
+  selector), backed by a new `updateRelationshipEndpoints` store action. Picking an
+  entity already on the other end swaps the pair rather than hitting the
+  no-self-relationship guard, mirroring `AddRelationshipDialog`'s source-change logic.
+- **Data model change: `Relationship` gained `tags`/`metadata`**, same shape as
+  Space/Orbit/Entity (`updateRelationshipTags`/`updateRelationshipMetadata` added;
+  `addRelationship` accepts optional `tags`/`metadata`, though creation UI stays
+  name/endpoints-only per the existing "creation is defaults-only" rule). Rendered/
+  edited in `RelationshipDetails` via the same `Badge`/`TagEditor`/`MetadataTable`/
+  `MetadataEditor` pieces `GroupDetails` uses. Tag *search* was deliberately **not**
+  extended to relationships in this pass (`buildTagIndex` still only covers
+  space/orbit/entity) — relationships have no `name` for a search-result label and no
+  sidebar row, so wiring them into search is more surface area than this ask covered.
+- **Note-level metadata was briefly removed from relationships, then reconsidered.**
+  Mid-session, relationship notes were made prose-only (metadata rejected at
+  `addNote`, enforced at the store boundary) because the note-level CIDR/VLAN example
+  read as confusing floating alongside a note's text. Once relationships gained their
+  own object-level `tags`/`metadata` (see above), that CIDR/VLAN example moved there
+  instead — its more natural home, matching how space/orbit/entity metadata already
+  works. Net result: relationship *notes* stay prose-only (no per-note metadata bag),
+  but relationships themselves now have metadata, same as every other object type.
+  plan.md's decision #6 and #11, the data model, the visibility table, and Phase 1
+  status were all updated to match.
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing
