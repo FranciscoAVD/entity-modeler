@@ -1,13 +1,16 @@
-import { Check, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, Check, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { relationshipScope } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { MetadataEditor } from "./MetadataEditor";
 import { MetadataTable } from "./MetadataTable";
 import { NoteDialog } from "./NoteDialog";
+import { EDGE_STYLES } from "./RelationshipEdge";
 import { TagEditor } from "./TagEditor";
 
 // InfoPanel itself carries no padding — it's flush edge-to-edge so the Notes section's note rows
@@ -41,7 +44,7 @@ export function NoteList({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-3">
-        <h4 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Notes</h4>
+        <h4 className="text-muted-foreground text-sm font-medium tracking-wide uppercase">Notes</h4>
         <Button
           variant="ghost"
           size="icon-xs"
@@ -64,7 +67,7 @@ export function NoteList({
             <div className="flex items-baseline justify-between gap-2">
               <p className="min-w-0 truncate font-medium text-primary">{note.title}</p>
               <div className="flex shrink-0 items-center gap-1">
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-sm">
                   {new Date(note.createdAt).toLocaleDateString()}
                 </p>
                 <Button
@@ -83,7 +86,7 @@ export function NoteList({
             <p className="line-clamp-6 mt-1 text-justify whitespace-pre-wrap break-words">
               {note.text}
             </p>
-            {note.author && <p className="text-muted-foreground mt-1 text-xs">— {note.author}</p>}
+            {note.author && <p className="text-muted-foreground mt-1 text-sm">— {note.author}</p>}
             {note.metadata && (
               <div className="mt-1.5">
                 <MetadataTable metadata={note.metadata} />
@@ -134,6 +137,7 @@ function GroupDetails({
   onUpdateTags,
   onUpdateMetadata,
   noteTargetType,
+  titleClassName,
 }: {
   id: string;
   name: string;
@@ -144,6 +148,7 @@ function GroupDetails({
   onUpdateTags: (tags: string[]) => void;
   onUpdateMetadata: (metadata: Record<string, string | number> | undefined) => void;
   noteTargetType: NoteTargetType;
+  titleClassName?: string;
 }) {
   const [editing, setEditing] = useState(false);
 
@@ -151,7 +156,7 @@ function GroupDetails({
     <div className="space-y-3">
       <PanelSection>
         <div className="flex items-center justify-between gap-2">
-          <h3 className="font-semibold">{label ?? name}</h3>
+          <h3 className={cn("text-xl font-semibold", titleClassName)}>{label ?? name}</h3>
           <Button
             variant="ghost"
             size="icon-xs"
@@ -197,6 +202,7 @@ function EntityDetails({ entityId }: { entityId: string }) {
       onUpdateTags={(tags) => updateEntityTags(entity.id, tags)}
       onUpdateMetadata={(metadata) => updateEntityMetadata(entity.id, metadata)}
       noteTargetType="entity"
+      titleClassName="text-entity"
     />
   );
 }
@@ -214,6 +220,7 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
       onUpdateTags={(tags) => updateOrbitTags(orbit.id, tags)}
       onUpdateMetadata={(metadata) => updateOrbitMetadata(orbit.id, metadata)}
       noteTargetType="orbit"
+      titleClassName="text-orbit"
     />
   );
 }
@@ -231,6 +238,7 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
       onUpdateTags={(tags) => updateSpaceTags(space.id, tags)}
       onUpdateMetadata={(metadata) => updateSpaceMetadata(space.id, metadata)}
       noteTargetType="space"
+      titleClassName="text-space"
     />
   );
 }
@@ -243,16 +251,26 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   const targetName = useModelStore((state) =>
     relationship ? state.entities.get(relationship.targetId)?.name : undefined,
   );
+  const scope = useModelStore((state) => relationshipScope(state, relationshipId));
   const deleteRelationship = useModelStore((state) => state.deleteRelationship);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   if (!relationship) return null;
 
+  // N:M is many-to-many both ways, so it borrows the same bidirectional icon as the sidebar's
+  // "Add relationship" action; 1:1/1:N stay a single directional arrow, source to target.
+  const CardinalityIcon = relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
+
   return (
     <div className="space-y-3">
       <PanelSection>
-        <h3 className="font-semibold">
-          {sourceName ?? "?"} → {targetName ?? "?"}
+        <h3
+          className="flex items-center gap-2 text-xl font-semibold"
+          style={{ color: EDGE_STYLES[scope].color }}
+        >
+          <span className="min-w-0 truncate">{sourceName ?? "?"}</span>
+          <CardinalityIcon className="size-5 shrink-0" />
+          <span className="min-w-0 truncate">{targetName ?? "?"}</span>
         </h3>
         <p className="text-muted-foreground text-sm">Cardinality: {relationship.cardinality}</p>
       </PanelSection>

@@ -21,7 +21,7 @@ export function TagEditor({ tags, onUpdate }: { tags: string[]; onUpdate: (tags:
 
   return (
     <div className="space-y-1.5">
-      <h4 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Tags</h4>
+      <h4 className="text-muted-foreground text-sm font-medium tracking-wide uppercase">Tags</h4>
       {tags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1">
           {tags.map((tag) => (
@@ -50,7 +50,7 @@ export function TagEditor({ tags, onUpdate }: { tags: string[]; onUpdate: (tags:
         }}
         onBlur={addTag}
         placeholder="Add tag..."
-        className={cn("h-6 w-full px-1.5 text-xs", tags.length > 0 && "mt-1")}
+        className={cn("h-7 w-full px-1.5 text-sm", tags.length > 0 && "mt-1")}
       />
     </div>
   );

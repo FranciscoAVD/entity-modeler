@@ -97,7 +97,7 @@ export function NoteDialog({
               </DialogHeader>
               <div className="space-y-2 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-muted-foreground text-xs">
+                  <p className="text-muted-foreground text-sm">
                     {new Date(note.createdAt).toLocaleDateString()}
                   </p>
                   <Button
@@ -110,7 +110,7 @@ export function NoteDialog({
                   </Button>
                 </div>
                 <p className="text-justify whitespace-pre-wrap break-words">{note.text}</p>
-                {note.author && <p className="text-muted-foreground text-xs">— {note.author}</p>}
+                {note.author && <p className="text-muted-foreground text-sm">— {note.author}</p>}
                 {note.metadata && <MetadataTable metadata={note.metadata} />}
               </div>
             </>

@@ -15,8 +15,16 @@ const CURVE_SEGMENTS = 32;
 const HIT_TUBE_RADIUS = 0.35;
 const TRIM_RADIUS = ENTITY_RADIUS + 0.05;
 const MARKER_T = 0.14;
+const ARROW_LENGTH = 0.35;
+const ARROW_RADIUS = 0.15;
 
-const EDGE_STYLES: Record<RelationshipScope, { color: string; lineWidth: number; dashed: boolean }> = {
+// Exported so the InfoPanel can color a relationship's title the same as its rendered edge —
+// relationships have no fixed per-type hue like space/orbit/entity do, their "color" is scope
+// (local/cross-orbit/cross-space), so this is the one source of truth for it.
+export const EDGE_STYLES: Record<
+  RelationshipScope,
+  { color: string; lineWidth: number; dashed: boolean }
+> = {
   local: { color: "#94a3b8", lineWidth: 1.5, dashed: false },
   "cross-orbit": { color: "#f59e0b", lineWidth: 2, dashed: false },
   "cross-space": { color: "#ec4899", lineWidth: 2, dashed: true },
@@ -44,23 +52,31 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
     isRelationshipVisible(state, relationship.id, hiddenSpaceIds, hiddenOrbitIds),
   );
 
-  const { points, hitGeometry, sourceMarkerPos, targetMarkerPos } = useMemo(() => {
-    const control = computeEdgeControlPoint(sourcePos, targetPos);
-    const trimmed = trimEdgeEndpoints(sourcePos, control, targetPos, TRIM_RADIUS);
+  const { points, hitGeometry, sourceMarkerPos, targetMarkerPos, sourceArrow, targetArrow } =
+    useMemo(() => {
+      const control = computeEdgeControlPoint(sourcePos, targetPos);
+      const trimmed = trimEdgeEndpoints(sourcePos, control, targetPos, TRIM_RADIUS);
 
-    const curve = new THREE.QuadraticBezierCurve3(
-      toVector3(trimmed.start),
-      toVector3(control),
-      toVector3(trimmed.end),
-    );
+      const curve = new THREE.QuadraticBezierCurve3(
+        toVector3(trimmed.start),
+        toVector3(control),
+        toVector3(trimmed.end),
+      );
 
-    return {
-      points: curve.getPoints(CURVE_SEGMENTS),
-      hitGeometry: new THREE.TubeGeometry(curve, CURVE_SEGMENTS, HIT_TUBE_RADIUS, 6, false),
-      sourceMarkerPos: curve.getPointAt(MARKER_T),
-      targetMarkerPos: curve.getPointAt(1 - MARKER_T),
-    };
-  }, [sourcePos, targetPos]);
+      // Tangent at t=0 points from source toward target (forward); the arrow touching the
+      // source node faces the opposite way (backward, out of the curve and into the node).
+      const forwardAtSource = curve.getTangentAt(0);
+      const forwardAtTarget = curve.getTangentAt(1);
+
+      return {
+        points: curve.getPoints(CURVE_SEGMENTS),
+        hitGeometry: new THREE.TubeGeometry(curve, CURVE_SEGMENTS, HIT_TUBE_RADIUS, 6, false),
+        sourceMarkerPos: curve.getPointAt(MARKER_T),
+        targetMarkerPos: curve.getPointAt(1 - MARKER_T),
+        sourceArrow: { tip: curve.getPointAt(0), direction: forwardAtSource.clone().negate() },
+        targetArrow: { tip: curve.getPointAt(1), direction: forwardAtTarget },
+      };
+    }, [sourcePos, targetPos]);
 
   if (!isVisible) return null;
 
@@ -119,7 +135,42 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
       </mesh>
       <CardinalityMarker position={sourceMarkerPos} text={sourceCardinality} color={style.color} />
       <CardinalityMarker position={targetMarkerPos} text={targetCardinality} color={style.color} />
+      {relationship.cardinality === "N:M" && (
+        <>
+          <ArrowHead tip={sourceArrow.tip} direction={sourceArrow.direction} color={style.color} />
+          <ArrowHead tip={targetArrow.tip} direction={targetArrow.direction} color={style.color} />
+        </>
+      )}
     </group>
+  );
+}
+
+// N:M is the one cardinality that's inherently bidirectional (many on both sides), so it's the
+// only one that gets arrowheads — 1:1/1:N keep just the text cardinality markers, unchanged.
+function ArrowHead({
+  tip,
+  direction,
+  color,
+}: {
+  tip: THREE.Vector3;
+  direction: THREE.Vector3;
+  color: string;
+}) {
+  const { position, quaternion } = useMemo(() => {
+    const dir = direction.clone().normalize();
+    // ConeGeometry is centered on its local origin with the apex at +height/2 along +Y, so the
+    // mesh position has to sit half a length back from the tip along the arrow's own direction.
+    return {
+      position: tip.clone().sub(dir.clone().multiplyScalar(ARROW_LENGTH / 2)),
+      quaternion: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir),
+    };
+  }, [tip, direction]);
+
+  return (
+    <mesh position={position} quaternion={quaternion}>
+      <coneGeometry args={[ARROW_RADIUS, ARROW_LENGTH, 12]} />
+      <meshBasicMaterial color={color} />
+    </mesh>
   );
 }
 

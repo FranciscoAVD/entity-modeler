@@ -6,7 +6,7 @@ export function MetadataTable({ metadata }: { metadata: Record<string, string | 
   if (entries.length === 0) return null;
 
   return (
-    <table className="text-xs">
+    <table className="text-sm">
       <tbody>
         {entries.map(([key, value]) => (
           <tr key={key}>

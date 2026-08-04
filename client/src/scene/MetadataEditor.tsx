@@ -61,14 +61,14 @@ export function MetadataEditor({
 
   return (
     <div className="space-y-1.5">
-      <h4 className="text-muted-foreground px-3 text-xs font-medium tracking-wide uppercase">
+      <h4 className="text-muted-foreground px-3 text-sm font-medium tracking-wide uppercase">
         Metadata
       </h4>
       {/* Rows stay edge-to-edge (no padding on the table itself) so a row's hover background
           spans the full panel width, same pattern as NoteList — the cells carry pl-3/pr-3 instead
           so the key/value text and action buttons still line up with PanelSection's px-3 inset. */}
       {entries.length > 0 && (
-        <table className="w-full text-xs">
+        <table className="w-full text-sm">
           <tbody>
             {entries.map(([k, v]) =>
               editingKey === k ? (
@@ -82,7 +82,7 @@ export function MetadataEditor({
                         if (e.key === "Enter") saveEdit();
                         if (e.key === "Escape") cancelEdit();
                       }}
-                      className="h-6 px-1.5 font-mono text-xs"
+                      className="h-7 px-1.5 font-mono text-sm"
                     />
                   </td>
                   <td className="py-0.5 pr-1">
@@ -93,7 +93,7 @@ export function MetadataEditor({
                         if (e.key === "Enter") saveEdit();
                         if (e.key === "Escape") cancelEdit();
                       }}
-                      className="h-6 px-1.5 text-xs"
+                      className="h-7 px-1.5 text-sm"
                     />
                   </td>
                   <td className="w-0 pr-3 whitespace-nowrap">
@@ -147,13 +147,13 @@ export function MetadataEditor({
           value={key}
           onChange={(e) => setKey(e.target.value)}
           placeholder="key"
-          className="h-6 px-1.5 text-xs"
+          className="h-7 px-1.5 text-sm"
         />
         <Input
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="value"
-          className="h-6 px-1.5 text-xs"
+          className="h-7 px-1.5 text-sm"
           onKeyDown={(e) => {
             if (e.key === "Enter") addEntry();
           }}
