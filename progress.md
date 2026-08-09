@@ -567,6 +567,14 @@ instead, and iterated on its exact shape with the user before writing code.
   presentational, consistent with how the rest of `InfoPanel`'s editing surfaces are
   tested, i.e. not at all; only the pure-logic layer has unit tests per the
   open-questions note on testing strategy).
+- **Follow-up styling pass** (`MarkdownContent.tsx`): `h1`/`h2`/`h3` all colored
+  `text-primary`, matching how the rest of the panel already uses `text-primary` as
+  an accent (badges, note titles). `ul`/`ol` markers got `marker:text-primary` too —
+  only the bullet/number, not the item text itself, stays tinted; the arbitrary
+  `marker:` variant lets that apply without touching `li`. `h1` was then resized from
+  `text-base` to `text-xl` specifically to match `GroupDetails`'/
+  `RelationshipDetails`' own title size in `InfoPanel.tsx`, so a note that uses `#` as
+  its top-level heading reads at the same visual weight as the object title above it.
 
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
