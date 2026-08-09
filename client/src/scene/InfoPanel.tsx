@@ -22,9 +22,9 @@ import type { Cardinality, Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { MetadataEditor } from "./MetadataEditor";
 import { MetadataTable } from "./MetadataTable";
-import { NoteDialog } from "./NoteDialog";
 import { EDGE_STYLES } from "./RelationshipEdge";
 import { TagEditor } from "./TagEditor";
+import { useViewStore } from "./viewStore";
 
 // InfoPanel itself carries no padding — it's flush edge-to-edge so the Notes section's note rows
 // can hover full-width. Everything else opts into the panel's horizontal inset via this wrapper.
@@ -32,8 +32,9 @@ function PanelSection({ children }: { children: ReactNode }) {
   return <div className="space-y-3 px-3">{children}</div>;
 }
 
-// dialogState is either "new" (Add note), a Note being viewed/edited, or null (dialog closed) —
-// one piece of state drives the whole view/add/edit flow through the same NoteDialog instance.
+// NotePanel (docked, see Overlay.tsx) owns view/add/edit; "which note is open" lives in
+// viewStore's openNote/openNoteFor rather than local state here, since NotePanel has to be
+// reachable from outside this subtree.
 export function NoteList({
   targetType,
   targetId,
@@ -43,16 +44,9 @@ export function NoteList({
   targetId: string;
   notes: Note[];
 }) {
-  const addNote = useModelStore((state) => state.addNote);
-  const updateNote = useModelStore((state) => state.updateNote);
   const deleteNote = useModelStore((state) => state.deleteNote);
-  const [dialogState, setDialogState] = useState<"new" | Note | null>(null);
+  const openNoteFor = useViewStore((state) => state.openNoteFor);
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
-
-  const handleSubmit = (title: string, text: string) => {
-    if (dialogState === "new") addNote(targetType, targetId, { title, text });
-    else if (dialogState) updateNote(targetType, targetId, dialogState.id, { title, text });
-  };
 
   return (
     <div className="space-y-2">
@@ -61,7 +55,7 @@ export function NoteList({
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => setDialogState("new")}
+          onClick={() => openNoteFor(targetType, targetId, "new")}
           aria-label="Add note"
         >
           <Plus />
@@ -71,7 +65,7 @@ export function NoteList({
         <div
           key={note.id}
           className="hover:bg-accent/10 cursor-pointer py-2 transition-colors"
-          onClick={() => setDialogState(note)}
+          onClick={() => openNoteFor(targetType, targetId, note)}
         >
           {/* Padding lives here, not on the row above — the row itself stays edge-to-edge so its
               hover background spans the full panel width, while the content inside still lines
@@ -108,14 +102,6 @@ export function NoteList({
           </div>
         </div>
       ))}
-      <NoteDialog
-        open={dialogState !== null}
-        onOpenChange={(open) => {
-          if (!open) setDialogState(null);
-        }}
-        note={dialogState ?? "new"}
-        onSubmit={handleSubmit}
-      />
       <DeleteConfirmDialog
         open={deleteNoteId !== null}
         onOpenChange={(open) => {

@@ -518,6 +518,56 @@ latter would repeat the `getSnapshot`-returns-a-new-reference-every-call bug
 documented below (`searchAll`), since freshly-constructed elements defeat
 `useShallow`'s one-level comparison.
 
+**NotePanel + Markdown notes** (plan.md's Phase 8 notes plan, now implemented —
+`client/src/scene/NotePanel.tsx`, `MarkdownContent.tsx`, `viewStore.ts`, `InfoPanel.tsx`,
+`Overlay.tsx`; `NoteDialog.tsx` deleted)
+Closes out the "notes are moving off the small-dialog pattern" item written up in the
+previous session. Started from a question about Obsidian-style render-as-you-type
+editing — assessed as a real CodeMirror undertaking (custom cursor-aware decorations
+to hide/reveal markdown syntax), not attempted here. Landed on a much cheaper option
+instead, and iterated on its exact shape with the user before writing code.
+- New `NotePanel.tsx`: docked sibling of `SidePanel` in `Overlay.tsx`
+  (`absolute inset-y-0 right-80 w-[28rem]`, flush against `SidePanel`'s left edge),
+  not a modal — same motivation as the original plan (notes run 500-800 words, the
+  shared `Dialog` primitive is a fixed 384px with no height cap). Retires
+  `NoteDialog.tsx` entirely; its view/edit/pencil-toggle content moved in with panel
+  chrome (own close button) instead of dialog chrome.
+- "Which note is open" moved out of `NoteList`'s local `useState` into
+  `viewStore.ts` as `openNote: { targetType, targetId, note: "new" | Note } | null`
+  plus `openNoteFor`/`closeNote` actions — matches the plan exactly, needed since
+  `NotePanel` mounts outside `NoteList`'s own subtree (as a sibling of `SidePanel`,
+  not inside `InfoPanel`).
+- New `MarkdownContent.tsx`: shared `react-markdown` + `remark-breaks` renderer
+  (remark-breaks so a single Enter still breaks the line, rather than requiring a
+  blank line like strict CommonMark) with custom per-element styling — headings,
+  lists, links, inline/block code, blockquotes — hand-matched to the panel's existing
+  typography rather than pulling in `@tailwindcss/typography` for a handful of tags.
+  One fix needed: react-markdown v10 no longer tells the `code` renderer whether it's
+  inline or fenced, so the inline-code background/padding is reset inside `pre` via a
+  `[&>code]:bg-transparent [&>code]:p-0` arbitrary-child selector rather than a
+  conditional prop that no longer exists.
+- **Editor decision diverged from the original plan, via a real-time back-and-forth
+  with the user.** The plan called for "editor stays a plain Textarea, no WYSIWYG."
+  Asked whether Obsidian-style live-render-while-typing was feasible first — assessed
+  as expensive (CodeMirror + custom decorations) and deferred. User then asked for a
+  side-by-side edit/preview split; before that was built, they reconsidered mid-build
+  and asked for "editing and preview as one pane" instead, which on clarification
+  meant a GitHub-style Write/Preview toggle occupying one pane at a time, not
+  simultaneous columns and not live-render-in-place. Implemented as two small buttons
+  above the `Textarea` in `NotePanel`'s edit form, swapping between the raw `Textarea`
+  and a `MarkdownContent` preview of the same `text` state — cheap, since it reuses
+  the existing render pipeline and editor state with no new dependency beyond
+  `react-markdown`/`remark-breaks` themselves.
+- Seed data (`seed.ts`) is all plain lorem-ipsum prose with no markdown syntax in it,
+  so the rendering difference won't show until a note actually contains markdown —
+  worth seeding one demonstrative note if this needs to be visually verified again
+  without hand-typing test content.
+- Verified: `tsc -b && vite build` clean, `oxlint` clean (pre-existing warnings only),
+  all 94 tests passing (no test coverage added for the new UI itself — it's
+  presentational, consistent with how the rest of `InfoPanel`'s editing surfaces are
+  tested, i.e. not at all; only the pure-logic layer has unit tests per the
+  open-questions note on testing strategy).
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing

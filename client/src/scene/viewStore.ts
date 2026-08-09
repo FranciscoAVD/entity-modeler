@@ -1,10 +1,21 @@
 import { create } from "zustand";
+import type { Note, NoteTargetType } from "@/store/types";
 
 export type FocusableType = "space" | "orbit" | "entity" | "relationship";
 
 export interface FocusTarget {
   id: string;
   type: FocusableType;
+}
+
+// Which note NotePanel is showing — "new" has nothing to view yet and opens straight into the
+// edit form, an existing Note opens read-only with a pencil toggle into that form. Lives here
+// rather than NoteList's local state since NotePanel has to be reachable from outside NoteList's
+// own subtree (plan.md's Phase 8 notes plan).
+export interface OpenNote {
+  targetType: NoteTargetType;
+  targetId: string;
+  note: "new" | Note;
 }
 
 // Rendering-only visibility toggles — kept separate from the model store since
@@ -25,6 +36,10 @@ interface ViewState {
   focusTarget: FocusTarget | null;
   focusToken: number;
   focusOn(id: string, type: FocusableType): void;
+
+  openNote: OpenNote | null;
+  openNoteFor(targetType: NoteTargetType, targetId: string, note: "new" | Note): void;
+  closeNote(): void;
 }
 
 function toggle(set: Set<string>, id: string): Set<string> {
@@ -57,5 +72,15 @@ export const useViewStore = create<ViewState>()((set, get) => ({
 
   focusOn(id, type) {
     set({ focusTarget: { id, type }, focusToken: get().focusToken + 1 });
+  },
+
+  openNote: null,
+
+  openNoteFor(targetType, targetId, note) {
+    set({ openNote: { targetType, targetId, note } });
+  },
+
+  closeNote() {
+    set({ openNote: null });
   },
 }));
