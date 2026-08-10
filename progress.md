@@ -616,6 +616,33 @@ codebase.
 - Verified with `tsc --noEmit` (clean); no visual/browser check was possible this
   session (Claude in Chrome not installed, user declined).
 
+**Note-list preview: Markdown rendering, active-row highlight, and a panel-close
+coupling fix** (not a plan.md phase — UI polish + bug fix, `client/src/scene/InfoPanel.tsx`,
+`SidePanel.tsx`)
+- `NoteList`'s clamped row preview (in `InfoPanel.tsx`) now renders through
+  `MarkdownContent` instead of plain clamped text — **reverses** the Phase 8 notes-plan
+  decision documented above ("rendering and line-clamp don't combine cleanly, and it's
+  a preview, not the view"); user asked for it explicitly, with the tradeoff called out
+  up front (clamping can now cut mid-element — a truncated list item or an unclosed
+  fenced code block — same as any "clamp rendered rich content" preview). Rendered at
+  `text-sm` (smaller than `MarkdownContent`'s own `text-base` default, overridden via
+  its `className` prop) since this is a preview row, not the full note view.
+- The row for whichever note is currently open in `NotePanel` now stays `bg-accent/10`
+  (the hover shade) rather than only lighting up transiently on hover — same "stay
+  highlighted while it's the current thing" convention `SidebarTree.tsx` already uses
+  for focus/active rows, driven by comparing `viewStore.openNote` against each row's
+  `targetType`/`targetId`/note id.
+- **Bug found and fixed**: `NotePanel` docks flush against `SidePanel`'s left edge
+  (`right-80`, see the Phase 8 entry above), but `SidePanel`'s close button only ever
+  called `clearActiveTab()` — closing the info panel while a note was open left
+  `NotePanel` floating mid-screen with an empty 20rem gap where `SidePanel` used to be,
+  since nothing tied the two panels' visibility together. Fixed by also calling
+  `viewStore.closeNote()` from that same close-button handler — notes are only ever
+  opened from inside `InfoPanel`, so scoping the note panel's lifetime to the info
+  panel's was the simpler of two options considered (the alternative, repositioning
+  `NotePanel` to dock at the true right edge when `SidePanel` is closed so it can float
+  independently, was rejected in favor of this).
+
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)
 - **Zustand `useShallow` gotcha**: works for arrays of *stable* references (existing
