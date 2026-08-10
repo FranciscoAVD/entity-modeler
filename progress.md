@@ -1,7 +1,7 @@
 # Progress recap
 
 Status as of 2026-08-10. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
-`server` Bun+Hono, unused so far). 101 tests passing, build/lint clean. Full
+`server` Bun+Hono, unused so far). 102 tests passing, build/lint clean. Full
 plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
 9 → 10 → 11`.
 
@@ -750,6 +750,64 @@ requirement that tags be unique per project.
   tag-registry cleanup, and the `tagsInProject`/`objectsForTag` selectors. No browser
   verification done this session (per standing preference — user verifies UI changes
   themselves).
+
+**Tag search redesigned: folded into the sidebar search box, grouped by category** (plan.md
+decision #11, further iteration on the previous session's tag-registry work — `client/src/store/
+selectors.ts`, `scene/SidebarSearch.tsx`, `scene/TagObjectsDialog.tsx` (new),
+`scene/TagBrowserDialog.tsx` (deleted), `scene/Sidebar.tsx`, `components/ui/combobox.tsx`,
+`store/store.test.ts`, `plan.md`)
+User-driven redesign, planned out via several rounds of clarifying questions before writing code
+(what happens on a tag click, whether TagBrowserDialog survives, whether rename/delete UI
+survives, whether projects stay in results, section order) — see the plan write-up in this
+session's transcript for the full Q&A. One bug caught and fixed along the way, before the redesign
+started: `TagBrowserDialog` (from the previous session) subscribed to `tagsInProject` directly as
+a Zustand selector without `useShallow` — since it builds a fresh array every call (`filter` +
+`sort`), that's the same "new reference every render" bug already documented for `searchAll`
+below, causing an infinite render loop. Fixed by wrapping in `useShallow` (harmless once `tagsInProject` element identities are the actual stable `Tag` objects from the map) — but `TagBrowserDialog` itself was fully replaced a few messages later by this redesign, so the fix lives on now only in `TagObjectsDialog`'s equivalent code (as a `useMemo` over raw Maps instead, see below).
+- **Tags are now their own top-level search category, not merged into the object list.**
+  Previously, typing a tag name matched it *exactly* and merged the objects carrying it directly
+  into the same flat result list as fuzzy title matches — indistinguishable from a title match
+  once rendered. Redesigned: the search dropdown now shows up to four labeled sections — **Tags,
+  Spaces, Orbits, Entities, tags always first, each section rendered only when it has ≥1 match**
+  — built with `ComboboxGroup`/`ComboboxLabel`/`ComboboxCollection` (already present in
+  `combobox.tsx`'s shadcn/base-ui scaffold, unused by the app until now). `ComboboxLabel`'s default
+  style gained `uppercase tracking-wide font-medium` to match the app's existing section-header
+  convention, since this was its first real usage.
+- **Tag matching switched from exact to fuzzy (substring), matching titles.** `buildTagIndex`/
+  `searchByTag` (the old exact-match inverted index) are gone; new `searchTags` does the same
+  substring match `searchByTitle` already does, just against tag names. `searchAll` is now simply
+  `[...searchTags(...), ...searchByTitle(...)]` — tags first, and — since a tag and a
+  same-named space/orbit/entity are different categories now — never deduplicated against each
+  other the way the old merged list had to be.
+- **Projects dropped from search entirely.** `SearchResult.type` lost `"project"` (gained
+  `"tag"`) — a project result never belonged in any of the four sections anyway, and project
+  switching already has its own UI in the Header.
+- **Clicking a Tag result doesn't focus the camera — a tag isn't a scene object.** It opens new
+  `TagObjectsDialog.tsx`, listing the spaces/orbits/entities carrying it (via the existing
+  `objectsForTag` selector, kept from the previous session). Picking one of *those* focuses the
+  camera, mirroring `SidebarTree`'s exact row-click behavior — including, per explicit direction,
+  the **cascading** visibility check (`isSpaceVisible`/`isOrbitVisible`/`isEntityVisible` from
+  `visibility.ts`) rather than `SidebarTree`'s own slightly-inconsistent inline check (its
+  `OrbitRow` only looks at the orbit's own hidden flag, not its parent space's — a discrepancy
+  flagged and deliberately not matched here, though `SidebarTree` itself was left as-is).
+  `objectsForTag`'s result is computed via a plain `useMemo` over the raw (stable) `spaces`/
+  `orbits`/`entities` Maps rather than as a Zustand selector — `objectsForTag` builds fresh plain
+  objects per match, so subscribing to it directly (even with `useShallow`) would hit the same
+  class of infinite-loop bug just fixed in `TagBrowserDialog` (see above), since `useShallow`'s
+  one-level comparison can't see past freshly-constructed *elements*, only a freshly-constructed
+  *array* of stable elements.
+- **`TagBrowserDialog.tsx` deleted; its rename/delete UI has no replacement yet** — explicit
+  scope cut, tracked as a new plan.md open question. `TagObjectsDialog` is read-only.
+  `renameTag`/`deleteTag` still exist and work at the store layer; only the UI trigger is gone.
+  `Sidebar.tsx`'s "Tags" section / "Browse tags" button is gone too — search is now the only tag
+  entry point.
+- Test coverage rewritten: fuzzy/substring tag-name matching (including a shared-tag-dedup case:
+  one `Tag` record tagged on both a space and an orbit still produces one search result, not two),
+  tag-before-title ordering in `searchAll`, and a "projects never appear in results" assertion.
+- Verified: `tsc -b`, `vite build`, and `oxlint` all clean; 102 tests passing. No browser
+  verification done this session (per standing preference) — worth checking the grouped dropdown,
+  the tag-click dialog, and that a hidden object's row inside that dialog is correctly
+  non-clickable/greyed before treating this as done.
 
 ## TODO — remaining phases
 
