@@ -1,12 +1,20 @@
 import { add } from "@/lib/vector3";
 import type { ModelState } from "./store";
-import type { Entity, Orbit, Project, Relationship, Space, Tab, Vector3 } from "./types";
+import type { Entity, Orbit, Project, Relationship, Space, Tab, Tag, Vector3 } from "./types";
 
 // Resolves tag ids (as stored on a space/orbit/entity/relationship) to their current display
 // names via the shared registry — dangling ids (e.g. a mid-render deleteTag race) are dropped
 // rather than surfaced as "undefined".
 export function tagNamesForIds(state: Pick<ModelState, "tags">, tagIds: string[]): string[] {
   return tagIds.map((id) => state.tags.get(id)?.name).filter((name): name is string => name !== undefined);
+}
+
+// Every tag belonging to a project (tag identity is (projectId, name), see plan.md decision
+// #11), sorted by name for a stable, browsable list — the tag registry UI's main listing.
+export function tagsInProject(state: Pick<ModelState, "tags">, projectId: string): Tag[] {
+  return [...state.tags.values()]
+    .filter((t) => t.projectId === projectId)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function allProjects(state: ModelState): Project[] {
@@ -48,6 +56,12 @@ export function projectIdForEntity(state: ModelState, entityId: string): string 
   const entity = state.entities.get(entityId);
   if (!entity) return undefined;
   return state.spaces.get(entity.spaceId)?.projectId;
+}
+
+export function projectIdForOrbit(state: ModelState, orbitId: string): string | undefined {
+  const orbit = state.orbits.get(orbitId);
+  if (!orbit) return undefined;
+  return state.spaces.get(orbit.spaceId)?.projectId;
 }
 
 export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
@@ -196,6 +210,27 @@ export function buildTagIndex(state: TaggableState, projectId: string): Map<stri
 // Exact match (not substring) — tags are a keyword index, unlike title search's fuzzy match.
 export function searchByTag(state: TaggableState, tag: string, projectId: string): string[] {
   return [...(buildTagIndex(state, projectId).get(tag.trim().toLowerCase()) ?? [])];
+}
+
+// Every space/orbit/entity carrying a specific tag id, resolved to a displayable/focusable shape
+// — the tag registry UI's "what does this tag apply to" drill-down. Relationships aren't
+// included, matching buildTagIndex's existing scope (no name field to show, no sidebar row —
+// plan.md decision #11).
+export function objectsForTag(
+  state: Pick<ModelState, "spaces" | "orbits" | "entities">,
+  tagId: string,
+): SearchResult[] {
+  const results: SearchResult[] = [];
+  for (const s of state.spaces.values()) {
+    if (s.tagIds.includes(tagId)) results.push({ id: s.id, type: "space", name: s.name });
+  }
+  for (const o of state.orbits.values()) {
+    if (o.tagIds.includes(tagId)) results.push({ id: o.id, type: "orbit", name: o.name });
+  }
+  for (const e of state.entities.values()) {
+    if (e.tagIds.includes(tagId)) results.push({ id: e.id, type: "entity", name: e.name });
+  }
+  return results;
 }
 
 // Combines title (fuzzy) and tag (exact) matches into one result list for a single search box —

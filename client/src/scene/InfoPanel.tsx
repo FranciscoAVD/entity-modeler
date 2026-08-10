@@ -14,8 +14,10 @@ import { cn } from "@/lib/utils";
 import {
   entitiesInProject,
   projectIdForEntity,
+  projectIdForOrbit,
   relationshipScope,
   tagNamesForIds,
+  tagsInProject,
 } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Cardinality, Note, NoteTargetType } from "@/store/types";
@@ -139,6 +141,7 @@ function GroupDetails({
   name,
   label,
   tags,
+  existingTags,
   metadata,
   notes,
   onUpdateTags,
@@ -150,6 +153,7 @@ function GroupDetails({
   name: string;
   label?: string;
   tags: string[];
+  existingTags: string[];
   metadata?: Record<string, string | number>;
   notes: Note[];
   onUpdateTags: (tags: string[]) => void;
@@ -174,7 +178,7 @@ function GroupDetails({
           </Button>
         </div>
         {editing ? (
-          <TagEditor tags={tags} onUpdate={onUpdateTags} />
+          <TagEditor tags={tags} existingTags={existingTags} onUpdate={onUpdateTags} />
         ) : (
           <>
             {tags.length > 0 && (
@@ -201,6 +205,12 @@ function EntityDetails({ entityId }: { entityId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (entity ? tagNamesForIds(state, entity.tagIds) : [])),
   );
+  const existingTags = useModelStore(
+    useShallow((state) => {
+      const projectId = projectIdForEntity(state, entityId);
+      return projectId ? tagsInProject(state, projectId).map((t) => t.name) : [];
+    }),
+  );
   const updateEntityTags = useModelStore((state) => state.updateEntityTags);
   const updateEntityMetadata = useModelStore((state) => state.updateEntityMetadata);
   if (!entity) return null;
@@ -210,6 +220,7 @@ function EntityDetails({ entityId }: { entityId: string }) {
       key={entity.id}
       {...entity}
       tags={tagNames}
+      existingTags={existingTags}
       onUpdateTags={(tags) => updateEntityTags(entity.id, tags)}
       onUpdateMetadata={(metadata) => updateEntityMetadata(entity.id, metadata)}
       noteTargetType="entity"
@@ -223,6 +234,12 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (orbit ? tagNamesForIds(state, orbit.tagIds) : [])),
   );
+  const existingTags = useModelStore(
+    useShallow((state) => {
+      const projectId = projectIdForOrbit(state, orbitId);
+      return projectId ? tagsInProject(state, projectId).map((t) => t.name) : [];
+    }),
+  );
   const updateOrbitTags = useModelStore((state) => state.updateOrbitTags);
   const updateOrbitMetadata = useModelStore((state) => state.updateOrbitMetadata);
   if (!orbit) return null;
@@ -232,6 +249,7 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
       key={orbit.id}
       {...orbit}
       tags={tagNames}
+      existingTags={existingTags}
       onUpdateTags={(tags) => updateOrbitTags(orbit.id, tags)}
       onUpdateMetadata={(metadata) => updateOrbitMetadata(orbit.id, metadata)}
       noteTargetType="orbit"
@@ -245,6 +263,9 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (space ? tagNamesForIds(state, space.tagIds) : [])),
   );
+  const existingTags = useModelStore(
+    useShallow((state) => (space ? tagsInProject(state, space.projectId).map((t) => t.name) : [])),
+  );
   const updateSpaceTags = useModelStore((state) => state.updateSpaceTags);
   const updateSpaceMetadata = useModelStore((state) => state.updateSpaceMetadata);
   if (!space) return null;
@@ -254,6 +275,7 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
       key={space.id}
       {...space}
       tags={tagNames}
+      existingTags={existingTags}
       onUpdateTags={(tags) => updateSpaceTags(space.id, tags)}
       onUpdateMetadata={(metadata) => updateSpaceMetadata(space.id, metadata)}
       noteTargetType="space"
@@ -279,6 +301,9 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   );
   const tagNames = useModelStore(
     useShallow((state) => (relationship ? tagNamesForIds(state, relationship.tagIds) : [])),
+  );
+  const existingTags = useModelStore(
+    useShallow((state) => (projectId ? tagsInProject(state, projectId).map((t) => t.name) : [])),
   );
   const deleteRelationship = useModelStore((state) => state.deleteRelationship);
   const updateRelationshipCardinality = useModelStore(
@@ -371,6 +396,7 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
             </Select>
             <TagEditor
               tags={tagNames}
+              existingTags={existingTags}
               onUpdate={(tags) => updateRelationshipTags(relationshipId, tags)}
             />
           </div>
