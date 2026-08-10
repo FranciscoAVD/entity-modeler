@@ -128,7 +128,7 @@ export function NotePanel({ className }: { className?: string }) {
           note !== "new" && (
             <>
               <div className="flex items-start justify-between gap-2">
-                <h3 className="text-primary min-w-0 truncate text-lg font-semibold">
+                <h3 className="text-primary min-w-0 truncate text-xl font-semibold">
                   {note.title}
                 </h3>
                 <Button

@@ -11,10 +11,10 @@ const components: Components = {
     <h1 className="text-primary mt-3 mb-1.5 text-xl font-semibold first:mt-0">{children}</h1>
   ),
   h2: ({ children }) => (
-    <h2 className="text-primary mt-3 mb-1.5 text-base font-semibold first:mt-0">{children}</h2>
+    <h2 className="text-primary mt-3 mb-1.5 text-lg font-semibold first:mt-0">{children}</h2>
   ),
   h3: ({ children }) => (
-    <h3 className="text-primary mt-3 mb-1 text-sm font-semibold first:mt-0">{children}</h3>
+    <h3 className="text-primary mt-3 mb-1 text-base font-semibold first:mt-0">{children}</h3>
   ),
   // marker:text-primary tints just the bullet/number, not the item text itself — matches how
   // text-primary is used as an accent elsewhere in the panel (badges, note titles), not body text.
@@ -36,12 +36,12 @@ const components: Components = {
     </a>
   ),
   code: ({ children }) => (
-    <code className="bg-border/40 rounded-xs px-1 py-0.5 font-mono text-[0.85em]">{children}</code>
+    <code className="bg-border/40 rounded-xs px-1 py-0.5 font-mono text-sm">{children}</code>
   ),
   // [&>code]: resets the inline `code` styling above for the one nested inside a block, since
   // react-markdown v10 no longer tells the code renderer whether it's inline or fenced.
   pre: ({ children }) => (
-    <pre className="bg-border/20 [&>code]:bg-transparent [&>code]:p-0 mb-2 overflow-x-auto rounded-sm p-2 font-mono text-[0.85em] last:mb-0">
+    <pre className="bg-border/20 [&>code]:bg-transparent [&>code]:p-0 mb-2 overflow-x-auto rounded-sm p-2 font-mono text-sm last:mb-0">
       {children}
     </pre>
   ),
@@ -55,7 +55,7 @@ const components: Components = {
 
 export function MarkdownContent({ text, className }: { text: string; className?: string }) {
   return (
-    <div className={cn("text-justify text-sm break-words", className)}>
+    <div className={cn("text-justify text-base break-words", className)}>
       <Markdown remarkPlugins={[remarkBreaks]} components={components}>
         {text}
       </Markdown>

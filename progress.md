@@ -558,10 +558,9 @@ instead, and iterated on its exact shape with the user before writing code.
   and a `MarkdownContent` preview of the same `text` state — cheap, since it reuses
   the existing render pipeline and editor state with no new dependency beyond
   `react-markdown`/`remark-breaks` themselves.
-- Seed data (`seed.ts`) is all plain lorem-ipsum prose with no markdown syntax in it,
-  so the rendering difference won't show until a note actually contains markdown —
-  worth seeding one demonstrative note if this needs to be visually verified again
-  without hand-typing test content.
+- Seed data (`seed.ts`) was, at the time this was written, all plain lorem-ipsum prose
+  with no markdown syntax in it — **superseded** by the seed-notes rewrite documented
+  below.
 - Verified: `tsc -b && vite build` clean, `oxlint` clean (pre-existing warnings only),
   all 94 tests passing (no test coverage added for the new UI itself — it's
   presentational, consistent with how the rest of `InfoPanel`'s editing surfaces are
@@ -575,6 +574,47 @@ instead, and iterated on its exact shape with the user before writing code.
   `text-base` to `text-xl` specifically to match `GroupDetails`'/
   `RelationshipDetails`' own title size in `InfoPanel.tsx`, so a note that uses `#` as
   its top-level heading reads at the same visual weight as the object title above it.
+
+**Seed notes rewritten as Markdown** (not a plan.md phase — content,
+`client/src/store/seed.ts`)
+All ten seed notes' `text` swapped from Lorem Ipsum to real Markdown — headings,
+ordered/unordered lists, bold/italic, inline code, fenced code blocks, blockquotes,
+links, `hr` — so `MarkdownContent.tsx`'s full rendering surface is exercised by the
+demo project without hand-typing test content, closing the "worth seeding one
+demonstrative note" gap noted above. Content stayed topically relevant to each object
+(space maintenance windows, orbit on-call rotations, entity known-issues, relationship
+network paths/change history) rather than generic placeholder text.
+
+**App-wide font-size consolidation to a 4-tier scale** (not a plan.md phase —
+typography pass, `client/src/scene/MarkdownContent.tsx`, `NotePanel.tsx`, `Sidebar.tsx`,
+`SidebarSearch.tsx`, `DeleteConfirmDialog.tsx`,
+`client/src/components/ui/{dialog,button,select,combobox,dropdown-menu,context-menu}.tsx`)
+User request: a floor of `text-sm` everywhere, with `text-xl` titles, `text-lg`
+subtitles, `text-base` paragraphs, and `text-sm` badges/extra-info. Swept every
+`text-xs` and sub-`sm` arbitrary size (`text-[0.8rem]`, `text-[0.85em]`) out of the
+codebase.
+- Titles bumped to `xl`: the shared `DialogTitle` primitive (was `text-base`, so this
+  affects every dialog in the app at once), `NotePanel`'s note-title heading (was
+  `lg`), and `Sidebar`'s project name (previously had no size class at all, so it was
+  silently rendering at the browser's 16px default rather than anything in the scale).
+- `MarkdownContent.tsx`'s heading scale re-tiered to match: `h1` stayed `xl`, `h2` went
+  `base→lg` (subtitle), `h3` went `sm→base` (no tier lower than `base` remains once the
+  floor is `sm`). Its outer container — the actual note-body paragraph text — went
+  `sm→base`; inline `code`/`pre` switched from a relative `text-[0.85em]` (would've
+  landed under the new `sm` floor once the container itself became `base`) to an
+  explicit `text-sm`.
+- Paragraphs bumped to `base`: `DeleteConfirmDialog`'s description line, the shared
+  `DialogDescription` primitive, and `Sidebar`'s project-description line.
+- Every remaining `text-xs` bumped to the new `sm` floor: menu shortcuts/group-labels
+  in `dropdown-menu.tsx`/`context-menu.tsx`, `SelectLabel`, `ComboboxLabel`/chip text,
+  `SidebarSearch`'s result-type tag, `Sidebar`'s two uppercase section headers, and
+  `Button`'s `xs`/`sm` size variants (`text-xs`/`text-[0.8rem]` → `text-sm`; padding
+  and height untouched, only the type size changed).
+- Deliberately left alone: `Input`/`Textarea`'s `text-base` (+ `md:text-sm` at desktop
+  widths) — a standard mobile-zoom-prevention pattern, already floor-compliant and
+  orthogonal to the title/subtitle/paragraph/badge hierarchy this pass was about.
+- Verified with `tsc --noEmit` (clean); no visual/browser check was possible this
+  session (Claude in Chrome not installed, user declined).
 
 ## Notable bugs hit and fixed along the way
 (worth knowing if similar patterns show up again)

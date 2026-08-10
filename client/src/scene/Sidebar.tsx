@@ -40,7 +40,7 @@ function SectionHeader({
 }) {
   return (
     <div className="mb-1.5 flex items-center justify-between">
-      <h2 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+      <h2 className="text-muted-foreground text-sm font-medium tracking-wide uppercase">
         {label}
       </h2>
       <DropdownMenu>
@@ -107,18 +107,18 @@ export function Sidebar({
     >
       <div className="flex flex-col gap-4 p-3">
         <div>
-          <h2 className="font-medium text-primary uppercase">
+          <h2 className="text-xl font-medium text-primary uppercase">
             {project?.name}
           </h2>
           {project?.description && (
-            <p className="text-muted-foreground mt-0.5 text-sm">
+            <p className="text-muted-foreground mt-0.5 text-base">
               {project.description}
             </p>
           )}
         </div>
 
         <div>
-          <h2 className="text-muted-foreground mb-1.5 text-xs font-medium tracking-wide uppercase">
+          <h2 className="text-muted-foreground mb-1.5 text-sm font-medium tracking-wide uppercase">
             Search
           </h2>
           <SidebarSearch />

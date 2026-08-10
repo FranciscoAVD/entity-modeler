@@ -33,7 +33,7 @@ export function DeleteConfirmDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
-        <p className="text-muted-foreground text-sm">{description}</p>
+        <p className="text-muted-foreground text-base">{description}</p>
         <DialogFooter>
           <Button variant="ghost" onClick={() => close(false)}>
             Cancel

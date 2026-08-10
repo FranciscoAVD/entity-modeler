@@ -19,12 +19,12 @@ export function seedDemoProject(): string {
   });
   addNote("space", spaceId, {
     title: "Overview",
-    text: "Eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit, sed quia consequuntur magni dolores eos qui ratione voluptatem sequi nesciunt.",
+    text: "## Space Alpha\n\nProduction space for the billing and identity stack. Hosts two orbits:\n\n- **Orbit A** — core services, actively maintained\n- **Empty Orbit** — reserved for the upcoming payments split\n\nRegion is `us-east-1`. See the [runbook](https://example.com/runbooks/space-alpha) before making changes.",
     author: "Alex",
   });
   addNote("space", spaceId, {
     title: "Maintenance window",
-    text: "Neque porro quisquam est, qui dolorem ipsum quia dolor sit amet, consectetur, adipisci velit, sed quia non numquam eius modi tempora incidunt ut labore et dolore magnam aliquam quaerat voluptatem.",
+    text: "Standard maintenance window is **Sundays 02:00–04:00 UTC**.\n\n1. Announce in `#platform-changes` 24h ahead\n2. Drain traffic from the affected orbit\n3. Apply changes, then verify health checks\n\n> Skipping step 1 caused a paging incident in March — don't skip step 1.",
     author: "Alex",
   });
 
@@ -37,11 +37,11 @@ export function seedDemoProject(): string {
   });
   addNote("orbit", populatedOrbit, {
     title: "Overview",
-    text: "Ut enim ad minima veniam, quis nostrum exercitationem ullam corporis suscipit laboriosam, nisi ut aliquid ex ea commodi consequatur. Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur.",
+    text: "### Orbit A\n\nOwned by the `platform-team`. Groups the core billing nodes:\n\n- Node 1 — primary billing service\n- Node 2 — internal support service\n\n---\n\nChanges here require a review from platform-team before merge.",
   });
   addNote("orbit", populatedOrbit, {
     title: "On-call",
-    text: "Vel illum qui dolorem eum fugiat quo voluptas nulla pariatur. At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati.",
+    text: "Current rotation:\n\n1. **Primary** — Jordan\n2. **Secondary** — Priya\n3. **Escalation** — Alex\n\nPage via `pagerduty:orbit-a`. For non-urgent issues, open a ticket instead — see the [on-call guide](https://example.com/runbooks/on-call).",
   });
 
   const node1 = addEntity({
@@ -54,11 +54,11 @@ export function seedDemoProject(): string {
   });
   addNote("entity", node1, {
     title: "Purpose",
-    text: "Cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi, id est laborum et dolorum fuga. Et harum quidem rerum facilis est et expedita distinctio. Nam libero tempore, cum soluta nobis est eligendi optio cumque nihil impedit quo minus.",
+    text: "Handles billing invoice generation and dunning. Reads from `orders` and writes to `invoices`.\n\nDeployed as a single service, version `2.3.1`. Scales horizontally behind the internal load balancer — see the [architecture doc](https://example.com/docs/node-1-architecture) for the full request path.",
   });
   addNote("entity", node1, {
     title: "Known issues",
-    text: "Id quod maxime placeat facere possimus, omnis voluptas assumenda est, omnis dolor repellendus. Temporibus autem quibusdam et aut officiis debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae non recusandae.",
+    text: "- Retry storm under `>500 req/s` on the `/invoices` endpoint — tracked, fix targeted for next release\n- Occasional clock drift causes duplicate dunning emails\n\n> Workaround: restart the service if duplicate emails are reported; root cause is still open.",
   });
 
   const node2 = addEntity({
@@ -78,11 +78,11 @@ export function seedDemoProject(): string {
   });
   addNote("entity", ungroupedNode, {
     title: "Pending triage",
-    text: "Itaque earum rerum hic tenetur a sapiente delectus, ut aut reiciendis voluptatibus maiores alias consequatur aut perferendis doloribus asperiores repellat. Not yet assigned to an orbit — pending review, see the on-call rotation for follow-up.",
+    text: "**Not yet assigned to an orbit** — pending review.\n\nCandidate homes:\n\n- Orbit A, if it turns out to be billing-adjacent\n- A new orbit, if it stays standalone\n\nSee the on-call rotation for follow-up.",
   });
   addNote("entity", ungroupedNode, {
     title: "History",
-    text: "Sed ut perspiciatis unde omnis iste natus error sit voluptatem accusantium doloremque laudantium, totam rem aperiam, eaque ipsa quae ab illo inventore veritatis et quasi architecto beatae vitae dicta sunt explicabo. Nemo enim ipsam voluptatem quia voluptas sit aspernatur aut odit aut fugit.",
+    text: "Originally provisioned as a scratch service for a spike test and never decommissioned. Traffic is low but non-zero, so removal needs a deprecation notice first.\n\n```\nlast traffic check: 2026-06-02, ~40 req/day\n```",
   });
 
   const spaceBeta = addSpace({
@@ -105,11 +105,11 @@ export function seedDemoProject(): string {
   }); // cross-space
   addNote("relationship", crossSpaceRel, {
     title: "Network path",
-    text: "Routed over the site-to-site VPN subnet. Quis autem vel eum iure reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui dolorem eum fugiat quo voluptas nulla pariatur.",
+    text: "Routed over the site-to-site VPN subnet `10.0.4.0/24`, VLAN `12`.\n\n- **Source** — Ungrouped Node (Space Alpha)\n- **Target** — Remote Node (Space Beta)\n\nLatency is typically 8–12ms; alert fires above 50ms.",
   });
   addNote("relationship", crossSpaceRel, {
     title: "Change history",
-    text: "At vero eos et accusamus et iusto odio dignissimos ducimus qui blanditiis praesentium voluptatum deleniti atque corrupti quos dolores et quas molestias excepturi sint occaecati cupiditate non provident, similique sunt in culpa qui officia deserunt mollitia animi.",
+    text: "1. **2026-02-14** — VPN tunnel established, VLAN 12 assigned\n2. **2026-04-03** — Cardinality widened from `1:N` to `N:M` to support multi-tenant lookups\n\n> Any further cardinality changes need sign-off from both space owners.",
   });
 
   return projectId;

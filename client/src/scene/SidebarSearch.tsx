@@ -116,7 +116,7 @@ export function SidebarSearch() {
               >
                 <ResultIcon type={result.type} />
                 <span className="truncate">{result.name}</span>
-                <span className="ml-auto text-xs capitalize">
+                <span className="ml-auto text-sm capitalize">
                   {result.type}
                 </span>
               </ComboboxItem>
