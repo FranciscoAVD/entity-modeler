@@ -1,7 +1,7 @@
 # Progress recap
 
-Status as of 2026-08-03. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
-`server` Bun+Hono, unused so far). 80 tests passing, build/lint clean. Full
+Status as of 2026-08-10. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
+`server` Bun+Hono, unused so far). 101 tests passing, build/lint clean. Full
 plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
 9 → 10 → 11`.
 
@@ -688,6 +688,68 @@ coupling fix** (not a plan.md phase — UI polish + bug fix, `client/src/scene/I
   afterwards**, so the feature was reverted rather than iterated on further. Either
   there's a second contributing factor not yet identified, or the diagnosis above is
   incomplete — don't assume it's solved if this is revisited.
+
+**Tags scoped per project, search scoped to the active project, and the tag registry UI**
+(plan.md decision #11's remaining "planned but not built" item, now closed —
+`client/src/store/types.ts`, `store.ts`, `selectors.ts`, `scene/TagEditor.tsx`,
+`scene/TagBrowserDialog.tsx` (new), `scene/InfoPanel.tsx`, `scene/Sidebar.tsx`,
+`scene/SidebarSearch.tsx`, `store/store.test.ts`, `plan.md`)
+User-driven design change, planned out before writing any code (four separate commits,
+one per stage) — starting point was "global tag creation/search" plus an explicit
+requirement that tags be unique per project.
+- **Data model: tag identity changed from global to project-scoped.** `Tag` gained a
+  `projectId` field; identity is now `(projectId, name)` instead of one shared registry
+  across every project — "billing" in two different projects now resolves to two
+  independent `Tag` records rather than being silently merged into one. `resolveTagIds`
+  (the "normalize on write" helper every `add*`/`update*Tags` action funnels through)
+  now dedups within a project only; the `projectId` it needs is resolved from data
+  already in scope at each of the 8 call sites (a space has it directly, orbit/entity/
+  relationship walk up via their parent space or source entity) — no signature changes
+  needed on `TagEditor` or any `InfoPanel.tsx` caller. `deleteProject`'s cascade gained
+  a step to remove that project's own tags from the registry outright (previously a
+  cascade-deleted object's tags were just orphaned-but-intact in the registry, reusable
+  by other objects in the same project — but a project-scoped tag can never be
+  referenced again once its project is gone). `renameTag` now throws on a same-project
+  name collision — merging two tags into one on collision is a real edge case,
+  deliberately left unhandled (tracked in plan.md's open questions).
+- **Search scoped to the active project.** `searchByTitle`/`buildTagIndex`/
+  `searchByTag`/`searchAll` (`selectors.ts`) all take a `projectId` now. Tag search
+  scoping was a direct requirement of the data-model change (two projects sharing a tag
+  *name* would otherwise conflate under one index key despite being independent tags);
+  title search scoping was bundled into the same pass on request, closing a standing
+  plan.md open question ("should search be scoped to the active project?") — leaving it
+  unscoped would have read as inconsistent sitting next to a tag search that could no
+  longer cross projects at all. `SidebarSearch.tsx` threads `projectId` through from
+  `Sidebar.tsx`, which already had it.
+- **New `TagBrowserDialog.tsx`**, reachable from a new "Browse tags" button in
+  `Sidebar.tsx` (its own section, below Search): lists every tag in the current project
+  with a live object count, each row expandable to the actual spaces/orbits/entities
+  carrying it (via new selector `objectsForTag`) — clicking one focuses the camera and
+  closes the dialog, same gating (`isSpaceVisible`/`isOrbitVisible`/`isEntityVisible`)
+  and same `focusOn` call `SidebarSearch`'s result click already uses. Rename (pencil →
+  inline `Input` + Check/X, same pattern as `MetadataEditor`'s row edit) wired to the
+  existing `renameTag`, surfacing its new collision error inline rather than throwing
+  uncaught; delete wired to the existing `deleteTag` behind the standard
+  `DeleteConfirmDialog`. New selector `tagsInProject` (sorted by name) backs the list.
+- **`TagEditor.tsx` gained autocomplete.** New optional `existingTags: string[]` prop
+  (the project's full tag-name list) drives a filtered suggestion dropdown (capped at 6)
+  below the add-tag input, so typing converges on the project's existing vocabulary
+  instead of relying on `resolveTagIds`' case-insensitive dedup to catch
+  near-duplicates after the fact — the other half of decision #11's "planned but not
+  built" line. Selecting a suggestion needed `onMouseDown` + `preventDefault` on the
+  suggestion button to fire before the input's existing `onBlur`-submits-the-draft
+  handler, otherwise clicking a suggestion would submit whatever was still typed
+  instead of the suggestion itself. Every `InfoPanel.tsx` call site
+  (`EntityDetails`/`OrbitDetails`/`SpaceDetails`/`RelationshipDetails`) now resolves its
+  own object's `projectId` (new selector `projectIdForOrbit` added for symmetry with
+  the existing `projectIdForEntity`; `SpaceDetails` already has `space.projectId`
+  directly) and passes `tagsInProject(...).map(t => t.name)` down as `existingTags`.
+- Verified: `tsc -b`, `vite build`, and `oxlint` all clean; 101 tests passing (up from
+  94), including new coverage for cross-project tag isolation, the rename collision
+  guard (and that it doesn't false-positive across projects), `deleteProject`'s
+  tag-registry cleanup, and the `tagsInProject`/`objectsForTag` selectors. No browser
+  verification done this session (per standing preference — user verifies UI changes
+  themselves).
 
 ## TODO — remaining phases
 
