@@ -142,28 +142,24 @@ export function entityDeleteImpact(state: ModelState, entityId: string): { relat
 
 export interface SearchResult {
   id: string;
-  type: "project" | "space" | "orbit" | "entity";
+  type: "space" | "orbit" | "entity" | "tag";
   name: string;
 }
 
-type SearchableState = Pick<ModelState, "projects" | "spaces" | "orbits" | "entities" | "tags">;
-type TaggableState = Pick<ModelState, "spaces" | "orbits" | "entities" | "tags">;
+type SearchableState = Pick<ModelState, "spaces" | "orbits" | "entities" | "tags">;
 
 // Relationships have no `name` field in the data model, so they're excluded from title search.
-// Scoped to a single project — previously this matched across every project's data regardless
-// of which one was active (a standing open question in plan.md), which read as odd once tags
-// (see buildTagIndex below) became project-scoped: a title match from an unrelated project would
-// show up right next to a tag search that could no longer cross projects at all.
+// Projects are excluded too — the search box lives inside one project's sidebar, and project
+// switching already has its own UI (the Header's project switcher). Scoped to a single project —
+// previously this matched across every project's data regardless of which one was active (a
+// standing open question in plan.md), which read as odd once tags became project-scoped: a title
+// match from an unrelated project would show up right next to a tag match that could no longer
+// cross projects at all.
 export function searchByTitle(state: SearchableState, query: string, projectId: string): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 
   const results: SearchResult[] = [];
-  const project = state.projects.get(projectId);
-  if (project && project.name.toLowerCase().includes(q)) {
-    results.push({ id: project.id, type: "project", name: project.name });
-  }
-
   const spaceIds = new Set<string>();
   for (const s of state.spaces.values()) {
     if (s.projectId !== projectId) continue;
@@ -181,41 +177,26 @@ export function searchByTitle(state: SearchableState, query: string, projectId: 
   return results;
 }
 
-// Recomputed on demand rather than incrementally maintained. Keyed lowercase so lookup is
-// case-insensitive, matching searchByTitle's behavior. Tags are stored as ids (plan.md decision
-// #11's normalized registry) — this resolves each id back to its current name via `state.tags`,
-// so a renamed tag is picked up automatically without touching any space/orbit/entity. Scoped to
-// a single project: since tag identity is (projectId, name), gating on `tag.projectId` here is
-// sufficient — a space/orbit/entity outside that project can never hold one of its tag ids in
-// the first place, so there's no need to separately filter the objects being indexed.
-export function buildTagIndex(state: TaggableState, projectId: string): Map<string, Set<string>> {
-  const index = new Map<string, Set<string>>();
-  const addAll = (items: Iterable<{ id: string; tagIds: string[] }>) => {
-    for (const item of items) {
-      for (const tagId of item.tagIds) {
-        const tag = state.tags.get(tagId);
-        if (!tag || tag.projectId !== projectId) continue;
-        const key = tag.name.toLowerCase();
-        if (!index.has(key)) index.set(key, new Set());
-        index.get(key)!.add(item.id);
-      }
-    }
-  };
-  addAll(state.spaces.values());
-  addAll(state.orbits.values());
-  addAll(state.entities.values());
-  return index;
-}
+// Fuzzy (substring) match against tag *names* in the project, same matching approach as
+// searchByTitle — tags are now their own top-level search category (a Tags section in the search
+// dropdown) rather than resolving directly to the objects that carry them; clicking a tag result
+// drills into those objects separately (see objectsForTag below), the same way clicking a space/
+// orbit result doesn't also list its entities inline.
+export function searchTags(state: Pick<ModelState, "tags">, query: string, projectId: string): SearchResult[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
 
-// Exact match (not substring) — tags are a keyword index, unlike title search's fuzzy match.
-export function searchByTag(state: TaggableState, tag: string, projectId: string): string[] {
-  return [...(buildTagIndex(state, projectId).get(tag.trim().toLowerCase()) ?? [])];
+  const results: SearchResult[] = [];
+  for (const tag of state.tags.values()) {
+    if (tag.projectId !== projectId) continue;
+    if (tag.name.toLowerCase().includes(q)) results.push({ id: tag.id, type: "tag", name: tag.name });
+  }
+  return results;
 }
 
 // Every space/orbit/entity carrying a specific tag id, resolved to a displayable/focusable shape
-// — the tag registry UI's "what does this tag apply to" drill-down. Relationships aren't
-// included, matching buildTagIndex's existing scope (no name field to show, no sidebar row —
-// plan.md decision #11).
+// — backs the "what does this tag apply to" dialog opened from a Tags search result. Relationships
+// aren't included — no name field to show, no sidebar row (plan.md decision #11).
 export function objectsForTag(
   state: Pick<ModelState, "spaces" | "orbits" | "entities">,
   tagId: string,
@@ -233,31 +214,11 @@ export function objectsForTag(
   return results;
 }
 
-// Combines title (fuzzy) and tag (exact) matches into one result list for a single search box —
-// the two indices stay conceptually separate (plan.md decision #11), this just merges their
-// output. Both scoped to the same project now (see searchByTitle/buildTagIndex above).
+// Combines tag and title matches into one result list for a single search box — tags first, so
+// the UI can group results into Tags/Spaces/Orbits/Entities sections (tags always on top) just by
+// filtering on `.type`. Both scoped to the same project (see searchByTitle/searchTags above).
 export function searchAll(state: SearchableState, query: string, projectId: string): SearchResult[] {
-  const titleResults = searchByTitle(state, query, projectId);
-  const seen = new Set(titleResults.map((r) => r.id));
-
-  const results = [...titleResults];
-  for (const id of searchByTag(state, query, projectId)) {
-    if (seen.has(id)) continue;
-    seen.add(id);
-    const space = state.spaces.get(id);
-    if (space) {
-      results.push({ id, type: "space", name: space.name });
-      continue;
-    }
-    const orbit = state.orbits.get(id);
-    if (orbit) {
-      results.push({ id, type: "orbit", name: orbit.name });
-      continue;
-    }
-    const entity = state.entities.get(id);
-    if (entity) results.push({ id, type: "entity", name: entity.name });
-  }
-  return results;
+  return [...searchTags(state, query, projectId), ...searchByTitle(state, query, projectId)];
 }
 
 // Resolves a tab's display label from the object it points at. Relationships have no name field,

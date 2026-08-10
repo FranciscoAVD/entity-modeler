@@ -1,4 +1,4 @@
-import { Plus, Tag } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import {
@@ -14,7 +14,6 @@ import { CreateDialog } from "./CreateDialog";
 import { MoveEntityDialog } from "./MoveEntityDialog";
 import { SidebarSearch } from "./SidebarSearch";
 import { SidebarTree } from "./SidebarTree";
-import { TagBrowserDialog } from "./TagBrowserDialog";
 
 export type PendingCreate =
   | { type: "space" }
@@ -76,7 +75,6 @@ export function Sidebar({
     undefined,
   );
   const [moveEntityId, setMoveEntityId] = useState<string | null>(null);
-  const [tagBrowserOpen, setTagBrowserOpen] = useState(false);
 
   // Triggered by an entity row's context menu ("Add relationship"), pre-filling the dialog's
   // source entity.
@@ -125,21 +123,6 @@ export function Sidebar({
           </h2>
           <SidebarSearch projectId={projectId} />
         </div>
-
-        <div>
-          <h2 className="text-muted-foreground mb-1.5 text-sm font-medium tracking-wide uppercase">
-            Tags
-          </h2>
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-1.5"
-            onClick={() => setTagBrowserOpen(true)}
-          >
-            <Tag />
-            Browse tags
-          </Button>
-        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-3 pt-4 pb-3">
@@ -180,7 +163,6 @@ export function Sidebar({
         }}
         entityId={moveEntityId}
       />
-      <TagBrowserDialog open={tagBrowserOpen} onOpenChange={setTagBrowserOpen} projectId={projectId} />
     </div>
   );
 }

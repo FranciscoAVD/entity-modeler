@@ -10,8 +10,8 @@ import {
   relationshipScope,
   relationshipsInProject,
   searchAll,
-  searchByTag,
   searchByTitle,
+  searchTags,
   spaceDeleteImpact,
   tabLabel,
   tagsInProject,
@@ -642,15 +642,17 @@ describe("search", () => {
     expect(searchByTitle(state, "dmz", projectId).map((r) => r.name)).toEqual(["DMZ"]);
   });
 
-  it("finds spaces/orbits by tag", () => {
+  it("searchTags fuzzy-matches tag names, deduped across objects that share a tag", () => {
     const { addProject, addSpace, addOrbit } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Prod", tags: ["prod", "external-facing"] });
     addOrbit({ spaceId, name: "Edge", tags: ["prod"] });
 
     const state = useModelStore.getState();
-    const ids = searchByTag(state, "prod", projectId);
-    expect(ids).toHaveLength(2);
+    // "prod" is shared (case-insensitive dedup, decision #11) between the space and the orbit —
+    // one registry entry, so one tag result, not two.
+    expect(searchTags(state, "prod", projectId).map((r) => r.name)).toEqual(["prod"]);
+    expect(searchTags(state, "facing", projectId).map((r) => r.name)).toEqual(["external-facing"]);
   });
 
   it("matches tags case-insensitively", () => {
@@ -658,21 +660,24 @@ describe("search", () => {
     const projectId = addProject({ name: "P" });
     addSpace({ projectId, name: "Prod", tags: ["Prod"] });
 
-    expect(searchByTag(useModelStore.getState(), "PROD", projectId)).toHaveLength(1);
+    expect(searchTags(useModelStore.getState(), "PROD", projectId)).toHaveLength(1);
   });
 
-  it("searchAll merges title and tag matches without duplicates", () => {
+  it("searchAll puts tag matches before title matches, as distinct results", () => {
     const { addProject, addSpace, addEntity } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Prod Cluster", tags: ["prod"] });
     addEntity({ spaceId, name: "Server" });
 
     const state = useModelStore.getState();
-    const byName = searchAll(state, "prod", projectId).map((r) => r.name);
-    expect(byName).toEqual(["Prod Cluster"]);
-
     const combined = searchAll(state, "prod", projectId);
-    expect(new Set(combined.map((r) => r.id)).size).toBe(combined.length);
+    // A tag named "prod" and a space named "Prod Cluster" are two separate categories now — the
+    // tag no longer resolves directly to the objects carrying it (that's objectsForTag's job,
+    // surfaced via a click-through dialog instead of being merged into this list).
+    expect(combined.map((r) => ({ type: r.type, name: r.name }))).toEqual([
+      { type: "tag", name: "prod" },
+      { type: "space", name: "Prod Cluster" },
+    ]);
   });
 
   it("does not match objects or tags from a different project", () => {
@@ -683,8 +688,16 @@ describe("search", () => {
     addSpace({ projectId: projectB, name: "Prod Backup", tags: ["prod"] });
 
     const state = useModelStore.getState();
-    expect(searchAll(state, "prod", projectA).map((r) => r.name)).toEqual(["Prod Cluster"]);
-    expect(searchAll(state, "prod", projectB).map((r) => r.name)).toEqual(["Prod Backup"]);
+    expect(searchAll(state, "prod", projectA).map((r) => r.name)).toEqual(["prod", "Prod Cluster"]);
+    expect(searchAll(state, "prod", projectB).map((r) => r.name)).toEqual(["prod", "Prod Backup"]);
+  });
+
+  it("does not include projects in search results", () => {
+    const { addProject } = useModelStore.getState();
+    const projectId = addProject({ name: "Network Topology" });
+
+    const state = useModelStore.getState();
+    expect(searchAll(state, "network", projectId)).toEqual([]);
   });
 });
 
