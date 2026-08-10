@@ -136,21 +136,32 @@ type SearchableState = Pick<ModelState, "projects" | "spaces" | "orbits" | "enti
 type TaggableState = Pick<ModelState, "spaces" | "orbits" | "entities" | "tags">;
 
 // Relationships have no `name` field in the data model, so they're excluded from title search.
-export function searchByTitle(state: SearchableState, query: string): SearchResult[] {
+// Scoped to a single project — previously this matched across every project's data regardless
+// of which one was active (a standing open question in plan.md), which read as odd once tags
+// (see buildTagIndex below) became project-scoped: a title match from an unrelated project would
+// show up right next to a tag search that could no longer cross projects at all.
+export function searchByTitle(state: SearchableState, query: string, projectId: string): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
 
   const results: SearchResult[] = [];
-  for (const p of state.projects.values()) {
-    if (p.name.toLowerCase().includes(q)) results.push({ id: p.id, type: "project", name: p.name });
+  const project = state.projects.get(projectId);
+  if (project && project.name.toLowerCase().includes(q)) {
+    results.push({ id: project.id, type: "project", name: project.name });
   }
+
+  const spaceIds = new Set<string>();
   for (const s of state.spaces.values()) {
+    if (s.projectId !== projectId) continue;
+    spaceIds.add(s.id);
     if (s.name.toLowerCase().includes(q)) results.push({ id: s.id, type: "space", name: s.name });
   }
   for (const o of state.orbits.values()) {
+    if (!spaceIds.has(o.spaceId)) continue;
     if (o.name.toLowerCase().includes(q)) results.push({ id: o.id, type: "orbit", name: o.name });
   }
   for (const e of state.entities.values()) {
+    if (!spaceIds.has(e.spaceId)) continue;
     if (e.name.toLowerCase().includes(q)) results.push({ id: e.id, type: "entity", name: e.name });
   }
   return results;
@@ -159,14 +170,17 @@ export function searchByTitle(state: SearchableState, query: string): SearchResu
 // Recomputed on demand rather than incrementally maintained. Keyed lowercase so lookup is
 // case-insensitive, matching searchByTitle's behavior. Tags are stored as ids (plan.md decision
 // #11's normalized registry) — this resolves each id back to its current name via `state.tags`,
-// so a renamed tag is picked up automatically without touching any space/orbit/entity.
-export function buildTagIndex(state: TaggableState): Map<string, Set<string>> {
+// so a renamed tag is picked up automatically without touching any space/orbit/entity. Scoped to
+// a single project: since tag identity is (projectId, name), gating on `tag.projectId` here is
+// sufficient — a space/orbit/entity outside that project can never hold one of its tag ids in
+// the first place, so there's no need to separately filter the objects being indexed.
+export function buildTagIndex(state: TaggableState, projectId: string): Map<string, Set<string>> {
   const index = new Map<string, Set<string>>();
   const addAll = (items: Iterable<{ id: string; tagIds: string[] }>) => {
     for (const item of items) {
       for (const tagId of item.tagIds) {
         const tag = state.tags.get(tagId);
-        if (!tag) continue;
+        if (!tag || tag.projectId !== projectId) continue;
         const key = tag.name.toLowerCase();
         if (!index.has(key)) index.set(key, new Set());
         index.get(key)!.add(item.id);
@@ -180,18 +194,19 @@ export function buildTagIndex(state: TaggableState): Map<string, Set<string>> {
 }
 
 // Exact match (not substring) — tags are a keyword index, unlike title search's fuzzy match.
-export function searchByTag(state: TaggableState, tag: string): string[] {
-  return [...(buildTagIndex(state).get(tag.trim().toLowerCase()) ?? [])];
+export function searchByTag(state: TaggableState, tag: string, projectId: string): string[] {
+  return [...(buildTagIndex(state, projectId).get(tag.trim().toLowerCase()) ?? [])];
 }
 
 // Combines title (fuzzy) and tag (exact) matches into one result list for a single search box —
-// the two indices stay conceptually separate (plan.md decision #11), this just merges their output.
-export function searchAll(state: SearchableState, query: string): SearchResult[] {
-  const titleResults = searchByTitle(state, query);
+// the two indices stay conceptually separate (plan.md decision #11), this just merges their
+// output. Both scoped to the same project now (see searchByTitle/buildTagIndex above).
+export function searchAll(state: SearchableState, query: string, projectId: string): SearchResult[] {
+  const titleResults = searchByTitle(state, query, projectId);
   const seen = new Set(titleResults.map((r) => r.id));
 
   const results = [...titleResults];
-  for (const id of searchByTag(state, query)) {
+  for (const id of searchByTag(state, query, projectId)) {
     if (seen.has(id)) continue;
     seen.add(id);
     const space = state.spaces.get(id);

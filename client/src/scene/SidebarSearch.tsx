@@ -43,7 +43,7 @@ function resultKey(result: SearchResult) {
   return `${result.type}:${result.id}`;
 }
 
-export function SidebarSearch() {
+export function SidebarSearch({ projectId }: { projectId: string }) {
   const [query, setQuery] = useState("");
 
   // searchAll builds fresh SearchResult objects on every call, so a reactive selector would
@@ -62,8 +62,8 @@ export function SidebarSearch() {
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
-    return searchAll({ projects, spaces, orbits, entities, tags }, query);
-  }, [query, projects, spaces, orbits, entities, tags]);
+    return searchAll({ projects, spaces, orbits, entities, tags }, query, projectId);
+  }, [query, projects, spaces, orbits, entities, tags, projectId]);
 
   // A hidden result has no scene geometry to fly to — resolveCameraFocus refuses to focus it
   // and falls through to whichever tab is currently active instead, which reads as the camera

@@ -584,8 +584,8 @@ describe("search", () => {
     addEntity({ spaceId, name: "Firewall" });
 
     const state = useModelStore.getState();
-    expect(searchByTitle(state, "wall").map((r) => r.name)).toEqual(["Firewall"]);
-    expect(searchByTitle(state, "dmz").map((r) => r.name)).toEqual(["DMZ"]);
+    expect(searchByTitle(state, "wall", projectId).map((r) => r.name)).toEqual(["Firewall"]);
+    expect(searchByTitle(state, "dmz", projectId).map((r) => r.name)).toEqual(["DMZ"]);
   });
 
   it("finds spaces/orbits by tag", () => {
@@ -595,7 +595,7 @@ describe("search", () => {
     addOrbit({ spaceId, name: "Edge", tags: ["prod"] });
 
     const state = useModelStore.getState();
-    const ids = searchByTag(state, "prod");
+    const ids = searchByTag(state, "prod", projectId);
     expect(ids).toHaveLength(2);
   });
 
@@ -604,7 +604,7 @@ describe("search", () => {
     const projectId = addProject({ name: "P" });
     addSpace({ projectId, name: "Prod", tags: ["Prod"] });
 
-    expect(searchByTag(useModelStore.getState(), "PROD")).toHaveLength(1);
+    expect(searchByTag(useModelStore.getState(), "PROD", projectId)).toHaveLength(1);
   });
 
   it("searchAll merges title and tag matches without duplicates", () => {
@@ -614,11 +614,23 @@ describe("search", () => {
     addEntity({ spaceId, name: "Server" });
 
     const state = useModelStore.getState();
-    const byName = searchAll(state, "prod").map((r) => r.name);
+    const byName = searchAll(state, "prod", projectId).map((r) => r.name);
     expect(byName).toEqual(["Prod Cluster"]);
 
-    const combined = searchAll(state, "prod");
+    const combined = searchAll(state, "prod", projectId);
     expect(new Set(combined.map((r) => r.id)).size).toBe(combined.length);
+  });
+
+  it("does not match objects or tags from a different project", () => {
+    const { addProject, addSpace } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    addSpace({ projectId: projectA, name: "Prod Cluster", tags: ["prod"] });
+    addSpace({ projectId: projectB, name: "Prod Backup", tags: ["prod"] });
+
+    const state = useModelStore.getState();
+    expect(searchAll(state, "prod", projectA).map((r) => r.name)).toEqual(["Prod Cluster"]);
+    expect(searchAll(state, "prod", projectB).map((r) => r.name)).toEqual(["Prod Backup"]);
   });
 });
 

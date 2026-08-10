@@ -121,7 +121,7 @@ export function Sidebar({
           <h2 className="text-muted-foreground mb-1.5 text-sm font-medium tracking-wide uppercase">
             Search
           </h2>
-          <SidebarSearch />
+          <SidebarSearch projectId={projectId} />
         </div>
       </div>
 
