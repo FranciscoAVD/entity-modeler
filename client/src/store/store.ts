@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { subtract } from "@/lib/vector3";
-import { getOrbitWorldOrigin, getWorldPosition, spacesInProject } from "./selectors";
+import { getOrbitWorldOrigin, getWorldPosition, projectIdForEntity, spacesInProject } from "./selectors";
 import type {
   Cardinality,
   Entity,
@@ -137,14 +137,24 @@ function pruneTabs(
   return { openTabs: remaining, activeTabId: nextActiveTabId };
 }
 
-// Resolves user-typed tag names (from TagEditor, or an add*'s `tags` input) against the shared
-// tag registry (plan.md decision #11) — reusing an existing tag (matched case-insensitively) if
-// one exists, creating it otherwise. This is the "normalize on write" step: every space/orbit/
-// entity/relationship ends up referencing tags by id, so renaming a tag only ever touches the
-// registry once instead of every object that carries it.
-function resolveTagIds(tags: Map<string, Tag>, names: string[]): { tagIds: string[]; tags: Map<string, Tag> } {
+// Resolves user-typed tag names (from TagEditor, or an add*'s `tags` input) against the tag
+// registry (plan.md decision #11), scoped to a single project — reusing an existing tag in that
+// project (matched case-insensitively) if one exists, creating it otherwise. This is the
+// "normalize on write" step: every space/orbit/entity/relationship ends up referencing tags by
+// id, so renaming a tag only ever touches the registry once instead of every object that
+// carries it. Tag identity is (projectId, name) — the same name in a different project resolves
+// to a different tag entirely, never reused across projects.
+function resolveTagIds(
+  tags: Map<string, Tag>,
+  names: string[],
+  projectId: string,
+): { tagIds: string[]; tags: Map<string, Tag> } {
   const nextTags = new Map(tags);
-  const idByName = new Map([...tags.values()].map((t) => [t.name.toLowerCase(), t.id]));
+  const idByName = new Map(
+    [...tags.values()]
+      .filter((t) => t.projectId === projectId)
+      .map((t) => [t.name.toLowerCase(), t.id]),
+  );
   const tagIds: string[] = [];
 
   for (const rawName of names) {
@@ -155,7 +165,7 @@ function resolveTagIds(tags: Map<string, Tag>, names: string[]): { tagIds: strin
     let id = idByName.get(key);
     if (!id) {
       id = crypto.randomUUID();
-      nextTags.set(id, { id, name });
+      nextTags.set(id, { id, projectId, name });
       idByName.set(key, id);
     }
     if (!tagIds.includes(id)) tagIds.push(id);
@@ -219,7 +229,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     if (!state.projects.has(projectId)) throw new Error(`Project not found: ${projectId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? []);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], projectId);
     const id = crypto.randomUUID();
     const spaces = new Map(state.spaces);
     spaces.set(id, {
@@ -238,9 +248,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
   addOrbit({ spaceId, name, label, origin, tags, metadata }) {
     const state = get();
-    if (!state.spaces.has(spaceId)) throw new Error(`Space not found: ${spaceId}`);
+    const parentSpace = state.spaces.get(spaceId);
+    if (!parentSpace) throw new Error(`Space not found: ${spaceId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? []);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], parentSpace.projectId);
     const id = crypto.randomUUID();
     const orbits = new Map(state.orbits);
     orbits.set(id, {
@@ -259,7 +270,8 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
   addEntity({ spaceId, orbitId, name, tags, position, metadata }) {
     const state = get();
-    if (!state.spaces.has(spaceId)) throw new Error(`Space not found: ${spaceId}`);
+    const parentSpace = state.spaces.get(spaceId);
+    if (!parentSpace) throw new Error(`Space not found: ${spaceId}`);
     if (orbitId !== undefined) {
       const orbit = state.orbits.get(orbitId);
       if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
@@ -268,7 +280,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       }
     }
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? []);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], parentSpace.projectId);
     const id = crypto.randomUUID();
     const entities = new Map(state.entities);
     entities.set(id, {
@@ -292,7 +304,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     if (!state.entities.has(sourceId)) throw new Error(`Entity not found: ${sourceId}`);
     if (!state.entities.has(targetId)) throw new Error(`Entity not found: ${targetId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? []);
+    const projectId = projectIdForEntity(state, sourceId);
+    if (!projectId) throw new Error(`Project not found for entity: ${sourceId}`);
+
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], projectId);
     const id = crypto.randomUUID();
     const relationships = new Map(state.relationships);
     relationships.set(id, {
@@ -404,7 +419,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const space = state.spaces.get(spaceId);
     if (!space) throw new Error(`Space not found: ${spaceId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, space.projectId);
     const spaces = new Map(state.spaces);
     spaces.set(spaceId, { ...space, tagIds });
     set({ spaces, tags: nextTags });
@@ -414,8 +429,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     const orbit = state.orbits.get(orbitId);
     if (!orbit) throw new Error(`Orbit not found: ${orbitId}`);
+    const parentSpace = state.spaces.get(orbit.spaceId);
+    if (!parentSpace) throw new Error(`Space not found: ${orbit.spaceId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, parentSpace.projectId);
     const orbits = new Map(state.orbits);
     orbits.set(orbitId, { ...orbit, tagIds });
     set({ orbits, tags: nextTags });
@@ -425,8 +442,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     const entity = state.entities.get(entityId);
     if (!entity) throw new Error(`Entity not found: ${entityId}`);
+    const parentSpace = state.spaces.get(entity.spaceId);
+    if (!parentSpace) throw new Error(`Space not found: ${entity.spaceId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, parentSpace.projectId);
     const entities = new Map(state.entities);
     entities.set(entityId, { ...entity, tagIds });
     set({ entities, tags: nextTags });
@@ -436,8 +455,10 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const state = get();
     const relationship = state.relationships.get(relationshipId);
     if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
+    const projectId = projectIdForEntity(state, relationship.sourceId);
+    if (!projectId) throw new Error(`Project not found for entity: ${relationship.sourceId}`);
 
-    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags);
+    const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, projectId);
     const relationships = new Map(state.relationships);
     relationships.set(relationshipId, { ...relationship, tagIds });
     set({ relationships, tags: nextTags });
@@ -452,6 +473,15 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
     const trimmed = name.trim();
     if (!trimmed) throw new Error("Tag name cannot be empty");
+
+    // Tag identity is (projectId, name) — renaming into a name another tag in the same project
+    // already holds would produce two registry entries with the same identity. Merging the two
+    // (remapping every tagIds reference onto one id) is a real edge case but out of scope here;
+    // this just refuses the collision rather than silently allowing it.
+    const collision = [...state.tags.values()].some(
+      (t) => t.id !== tagId && t.projectId === tag.projectId && t.name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (collision) throw new Error(`A tag named "${trimmed}" already exists in this project`);
 
     const tags = new Map(state.tags);
     tags.set(tagId, { ...tag, name: trimmed });
@@ -539,7 +569,17 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
     const projects = new Map(get().projects);
     projects.delete(projectId);
-    set({ projects });
+
+    // Tags are project-scoped (identity is projectId + name) — unlike deleteSpace's cascade,
+    // which just leaves a tag's references stripped and the registry entry itself orphaned but
+    // intact (it may still be reused by other objects in the project), a project-scoped tag can
+    // never be referenced again once its project is gone, so it's removed outright here.
+    const tags = new Map(get().tags);
+    for (const [id, tag] of tags) {
+      if (tag.projectId === projectId) tags.delete(id);
+    }
+
+    set({ projects, tags });
   },
 
   deleteSpace(spaceId) {

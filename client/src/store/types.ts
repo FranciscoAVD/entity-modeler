@@ -65,11 +65,14 @@ export interface Relationship {
   metadata?: Record<string, string | number>;
 }
 
-// The shared tag registry (plan.md decision #11) — space/orbit/entity/relationship objects
-// reference tags by id (tagIds) rather than duplicating free-typed strings, so renaming a tag
-// only ever touches this one record, and every object that carries it picks up the new name.
+// The tag registry (plan.md decision #11) — space/orbit/entity/relationship objects reference
+// tags by id (tagIds) rather than duplicating free-typed strings, so renaming a tag only ever
+// touches this one record, and every object that carries it picks up the new name. Tags are
+// scoped to a project (projectId) — identity is (projectId, name), so "billing" in two
+// different projects is two independent tags, never merged.
 export interface Tag {
   id: string;
+  projectId: string;
   name: string;
 }
 
