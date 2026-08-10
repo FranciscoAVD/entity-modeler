@@ -1,4 +1,4 @@
-import { ArrowRight, ArrowRightLeft, ChevronRight, Move, Trash2 } from "lucide-react";
+import { ArrowRight, ArrowRightLeft, ChevronRight, EyeOff, Move, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
@@ -344,6 +344,9 @@ function SpaceRow({
           <span className="min-w-0 flex-1 truncate">
             {space.label ?? space.name}
           </span>
+          {hidden && (
+            <EyeOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Hidden" />
+          )}
           <ExpandToggle expandable={hasChildren} open={open} />
         </div>
       </RowContextMenu>
@@ -387,7 +390,13 @@ function OrbitRow({
   const nodes = useModelStore(
     useShallow((state) => entitiesInOrbit(state, orbit.id)),
   );
-  const hidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
+  // ownHidden is the orbit's own stored toggle — drives the context menu's "Visible" checkbox,
+  // which should reflect what you actually set, not the cascaded result. hidden is the effective
+  // (rendered/clickable) state, also accounting for the parent space — previously this only
+  // checked the orbit's own flag, missing the space, unlike EntityRow's equivalent check.
+  const ownHidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
+  const spaceHidden = useViewStore((state) => state.hiddenSpaceIds.has(orbit.spaceId));
+  const hidden = ownHidden || spaceHidden;
   const toggleOrbitVisibility = useViewStore(
     (state) => state.toggleOrbitVisibility,
   );
@@ -406,7 +415,7 @@ function OrbitRow({
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <RowContextMenu
-        visibility={{ visible: !hidden, onToggleVisible: () => toggleOrbitVisibility(orbit.id) }}
+        visibility={{ visible: !ownHidden, onToggleVisible: () => toggleOrbitVisibility(orbit.id) }}
         onRename={() => onRequestRename({ type: "orbit", id: orbit.id, name: orbit.name })}
         onViewNotes={() => openTab(orbit.id, "orbit")}
         onDelete={() => onRequestDelete({ type: "orbit", id: orbit.id, name: orbit.name })}
@@ -437,6 +446,9 @@ function OrbitRow({
           <span className="min-w-0 flex-1 truncate">
             {orbit.label ?? orbit.name}
           </span>
+          {hidden && (
+            <EyeOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Hidden" />
+          )}
           <ExpandToggle expandable={hasChildren} open={open} />
         </div>
       </RowContextMenu>
@@ -550,6 +562,9 @@ function EntityRow({
       >
         <EntityIcon className="shrink-0" />
         <span className="min-w-0 flex-1 truncate">{entity.name}</span>
+        {hidden && (
+          <EyeOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Hidden" />
+        )}
       </div>
     </RowContextMenu>
   );
