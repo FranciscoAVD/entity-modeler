@@ -20,6 +20,7 @@ import {
 import { useModelStore } from "@/store/store";
 import type { Cardinality, Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
+import { MarkdownContent } from "./MarkdownContent";
 import { MetadataEditor } from "./MetadataEditor";
 import { MetadataTable } from "./MetadataTable";
 import { EDGE_STYLES } from "./RelationshipEdge";
@@ -45,6 +46,7 @@ export function NoteList({
   notes: Note[];
 }) {
   const deleteNote = useModelStore((state) => state.deleteNote);
+  const openNote = useViewStore((state) => state.openNote);
   const openNoteFor = useViewStore((state) => state.openNoteFor);
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
 
@@ -64,7 +66,15 @@ export function NoteList({
       {notes.map((note) => (
         <div
           key={note.id}
-          className="hover:bg-accent/10 cursor-pointer py-2 transition-colors"
+          className={cn(
+            "hover:bg-accent/10 cursor-pointer py-2 transition-colors",
+            openNote &&
+              openNote.note !== "new" &&
+              openNote.targetType === targetType &&
+              openNote.targetId === targetId &&
+              openNote.note.id === note.id &&
+              "bg-accent/10",
+          )}
           onClick={() => openNoteFor(targetType, targetId, note)}
         >
           {/* Padding lives here, not on the row above — the row itself stays edge-to-edge so its
@@ -90,9 +100,7 @@ export function NoteList({
                 </Button>
               </div>
             </div>
-            <p className="line-clamp-6 mt-1 text-justify whitespace-pre-wrap break-words">
-              {note.text}
-            </p>
+            <MarkdownContent text={note.text} className="line-clamp-6 mt-1 text-sm" />
             {note.author && <p className="text-muted-foreground mt-1 text-sm">— {note.author}</p>}
             {note.metadata && (
               <div className="mt-1.5">
