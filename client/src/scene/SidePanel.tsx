@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { InfoPanel } from "./InfoPanel";
+import { useViewStore } from "./viewStore";
 
 // Gated on activeTabId, not openTabs — closing the panel (clearActiveTab) deliberately
 // leaves the recency history alone, so this can hide even while tabs are still open to
@@ -10,6 +11,7 @@ import { InfoPanel } from "./InfoPanel";
 export function SidePanel({ className }: { className?: string }) {
   const activeTabId = useModelStore((state) => state.activeTabId);
   const clearActiveTab = useModelStore((state) => state.clearActiveTab);
+  const closeNote = useViewStore((state) => state.closeNote);
   if (activeTabId === null) return null;
 
   return (
@@ -20,7 +22,17 @@ export function SidePanel({ className }: { className?: string }) {
       )}
     >
       <div className="border-border flex justify-end border-b p-1.5">
-        <Button variant="ghost" size="icon-xs" onClick={clearActiveTab} aria-label="Close panel">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => {
+            clearActiveTab();
+            // NotePanel docks flush against SidePanel's left edge (Overlay.tsx) — closing the
+            // info panel out from under it would otherwise leave it floating mid-screen.
+            closeNote();
+          }}
+          aria-label="Close panel"
+        >
           <X />
         </Button>
       </div>
