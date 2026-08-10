@@ -6,6 +6,7 @@ import {
   entityDeleteImpact,
   getOrbitWorldOrigin,
   getWorldPosition,
+  objectsForTag,
   relationshipScope,
   relationshipsInProject,
   searchAll,
@@ -13,6 +14,7 @@ import {
   searchByTitle,
   spaceDeleteImpact,
   tabLabel,
+  tagsInProject,
 } from "./selectors";
 import { useModelStore } from "./store";
 
@@ -289,6 +291,58 @@ describe("tags and metadata", () => {
   it("deleteTag throws for an unknown tag", () => {
     const { deleteTag } = useModelStore.getState();
     expect(() => deleteTag("missing")).toThrow();
+  });
+
+  it("scopes tag identity to a project — the same name in two projects resolves to two tags", () => {
+    const { addProject, addSpace } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    const spaceA = addSpace({ projectId: projectA, name: "Space A", tags: ["billing"] });
+    const spaceB = addSpace({ projectId: projectB, name: "Space B", tags: ["billing"] });
+
+    const state = useModelStore.getState();
+    const tagIdA = state.spaces.get(spaceA)?.tagIds[0];
+    const tagIdB = state.spaces.get(spaceB)?.tagIds[0];
+    expect(tagIdA).toBeDefined();
+    expect(tagIdB).toBeDefined();
+    expect(tagIdA).not.toBe(tagIdB);
+    expect(state.tags.size).toBe(2);
+  });
+
+  it("renameTag throws when the new name collides with another tag in the same project", () => {
+    const { addProject, addSpace, renameTag } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Space", tags: ["core", "edge"] });
+
+    const [coreId] = useModelStore.getState().spaces.get(spaceId)!.tagIds;
+    expect(() => renameTag(coreId, "edge")).toThrow();
+  });
+
+  it("renameTag allows the same name already used by a tag in a different project", () => {
+    const { addProject, addSpace, renameTag } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    addSpace({ projectId: projectB, name: "Space B", tags: ["edge"] });
+    const spaceA = addSpace({ projectId: projectA, name: "Space A", tags: ["core"] });
+
+    const [coreId] = useModelStore.getState().spaces.get(spaceA)!.tagIds;
+    expect(() => renameTag(coreId, "edge")).not.toThrow();
+    expect(useModelStore.getState().tags.get(coreId)?.name).toBe("edge");
+  });
+
+  it("deleteProject removes only that project's tags from the registry", () => {
+    const { addProject, addSpace, deleteProject } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    addSpace({ projectId: projectA, name: "Space A", tags: ["billing"] });
+    const spaceB = addSpace({ projectId: projectB, name: "Space B", tags: ["billing"] });
+
+    const tagIdB = useModelStore.getState().spaces.get(spaceB)!.tagIds[0];
+    deleteProject(projectA);
+
+    const state = useModelStore.getState();
+    expect([...state.tags.values()].every((t) => t.projectId === projectB)).toBe(true);
+    expect(state.tags.has(tagIdB)).toBe(true);
   });
 
   it("updateEntityMetadata sets and clears the metadata bag", () => {
@@ -631,6 +685,33 @@ describe("search", () => {
     const state = useModelStore.getState();
     expect(searchAll(state, "prod", projectA).map((r) => r.name)).toEqual(["Prod Cluster"]);
     expect(searchAll(state, "prod", projectB).map((r) => r.name)).toEqual(["Prod Backup"]);
+  });
+});
+
+describe("tag registry selectors", () => {
+  it("tagsInProject lists only a project's own tags, sorted by name", () => {
+    const { addProject, addSpace } = useModelStore.getState();
+    const projectA = addProject({ name: "A" });
+    const projectB = addProject({ name: "B" });
+    addSpace({ projectId: projectA, name: "Space A", tags: ["zeta", "alpha"] });
+    addSpace({ projectId: projectB, name: "Space B", tags: ["billing"] });
+
+    const names = tagsInProject(useModelStore.getState(), projectA).map((t) => t.name);
+    expect(names).toEqual(["alpha", "zeta"]);
+  });
+
+  it("objectsForTag resolves every space/orbit/entity carrying a tag", () => {
+    const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Prod", tags: ["prod"] });
+    addOrbit({ spaceId, name: "Edge", tags: ["prod"] });
+    addEntity({ spaceId, name: "Server", tags: ["prod"] });
+    addEntity({ spaceId, name: "Untagged" });
+
+    const state = useModelStore.getState();
+    const tagId = state.spaces.get(spaceId)!.tagIds[0];
+    const results = objectsForTag(state, tagId);
+    expect(results.map((r) => r.name).sort()).toEqual(["Edge", "Prod", "Server"]);
   });
 });
 
