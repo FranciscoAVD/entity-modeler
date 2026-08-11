@@ -299,7 +299,7 @@ function SpaceRow({
   const isFocused =
     activeTabId === space.id ||
     (focusTarget?.type === "space" && focusTarget.id === space.id);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const hasChildren = orbits.length > 0 || nodes.length > 0;
 
   // A hidden object has no scene geometry to fly to — resolveCameraFocus refuses to focus it

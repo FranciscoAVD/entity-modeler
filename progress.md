@@ -1397,6 +1397,13 @@ hard `OrbitControls` `maxDistance={80}`.
   116 tests passing (up from 113 — 3 new). No browser verification done this session
   (per standing preference).
 
+**Sidebar space rows default collapsed** (`client/src/scene/SidebarTree.tsx`)
+User request. `SpaceRow`'s `useState(true)` → `useState(false)`, matching `OrbitRow`'s
+existing default — both tiers now start collapsed rather than spaces alone starting
+open. Presentational-only, no test coverage to update (consistent with how the rest of
+`SidebarTree.tsx` is tested — not at all, per this project's standing "pure logic only"
+testing convention).
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
