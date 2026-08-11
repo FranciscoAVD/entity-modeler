@@ -12,38 +12,38 @@ import {
 import { orbitsInSpace, spacesInProject } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 
-// Radix Select can't use an empty string as an item value, so an orbit-less entity is represented
+// Radix Select can't use an empty string as an item value, so an orbit-less node is represented
 // by this sentinel rather than "" — translated back to `orbitId: undefined` on submit.
 const NO_ORBIT = "__none__";
 
 // Modeled on AddRelationshipDialog: two dependent Selects, resynced via useEffect on open since
-// this dialog instance is reused across different entities without unmounting.
-export function MoveEntityDialog({
+// this dialog instance is reused across different nodes without unmounting.
+export function MoveNodeDialog({
   open,
   onOpenChange,
-  entityId,
+  nodeId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  entityId: string | null;
+  nodeId: string | null;
 }) {
-  const entity = useModelStore((state) => (entityId ? state.entities.get(entityId) : undefined));
-  const space = useModelStore((state) => (entity ? state.spaces.get(entity.spaceId) : undefined));
+  const node = useModelStore((state) => (nodeId ? state.nodes.get(nodeId) : undefined));
+  const space = useModelStore((state) => (node ? state.spaces.get(node.spaceId) : undefined));
   const spaces = useModelStore(
     useShallow((state) => (space ? spacesInProject(state, space.projectId) : [])),
   );
-  const moveEntity = useModelStore((state) => state.moveEntity);
+  const moveNode = useModelStore((state) => state.moveNode);
 
   const [spaceId, setSpaceId] = useState("");
   const [orbitId, setOrbitId] = useState(NO_ORBIT);
   const orbits = useModelStore(useShallow((state) => (spaceId ? orbitsInSpace(state, spaceId) : [])));
 
   useEffect(() => {
-    if (open && entity) {
-      setSpaceId(entity.spaceId);
-      setOrbitId(entity.orbitId ?? NO_ORBIT);
+    if (open && node) {
+      setSpaceId(node.spaceId);
+      setOrbitId(node.orbitId ?? NO_ORBIT);
     }
-  }, [open, entity]);
+  }, [open, node]);
 
   const close = (next: boolean) => {
     onOpenChange(next);
@@ -57,11 +57,11 @@ export function MoveEntityDialog({
     setOrbitId(NO_ORBIT);
   };
 
-  const canSubmit = entityId && spaceId;
+  const canSubmit = nodeId && spaceId;
 
   const submit = () => {
     if (!canSubmit) return;
-    moveEntity(entityId, { spaceId, orbitId: orbitId === NO_ORBIT ? undefined : orbitId });
+    moveNode(nodeId, { spaceId, orbitId: orbitId === NO_ORBIT ? undefined : orbitId });
     close(false);
   };
 
@@ -69,7 +69,7 @@ export function MoveEntityDialog({
     <Dialog open={open} onOpenChange={close}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Move {entity?.name ?? "node"}</DialogTitle>
+          <DialogTitle>Move {node?.name ?? "node"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-2">
           <Select value={spaceId} onValueChange={handleSpaceChange}>

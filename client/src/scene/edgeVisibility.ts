@@ -1,5 +1,5 @@
 import type { ModelState } from "@/store/store";
-import { isEntityVisible } from "./visibility";
+import { isNodeVisible } from "./visibility";
 
 // An edge disappears if either endpoint's space or orbit has been toggled hidden. Visibility
 // toggles live in viewStore, separate from the model store, so both hidden sets are passed in
@@ -13,7 +13,7 @@ export function isRelationshipVisible(
   const relationship = state.relationships.get(relationshipId);
   if (!relationship) return false;
   return (
-    isEntityVisible(state, relationship.sourceId, hiddenSpaceIds, hiddenOrbitIds) &&
-    isEntityVisible(state, relationship.targetId, hiddenSpaceIds, hiddenOrbitIds)
+    isNodeVisible(state, relationship.sourceId, hiddenSpaceIds, hiddenOrbitIds) &&
+    isNodeVisible(state, relationship.targetId, hiddenSpaceIds, hiddenOrbitIds)
   );
 }

@@ -42,7 +42,7 @@ export interface Orbit {
   metadata?: Record<string, string | number>;
 }
 
-export interface Entity {
+export interface Node {
   id: string;
   spaceId: string;
   orbitId?: string;
@@ -65,7 +65,7 @@ export interface Relationship {
   metadata?: Record<string, string | number>;
 }
 
-// The tag registry (plan.md decision #11) — space/orbit/entity/relationship objects reference
+// The tag registry (plan.md decision #11) — space/orbit/node/relationship objects reference
 // tags by id (tagIds) rather than duplicating free-typed strings, so renaming a tag only ever
 // touches this one record, and every object that carries it picks up the new name. Tags are
 // scoped to a project (projectId) — identity is (projectId, name), so "billing" in two
@@ -76,16 +76,16 @@ export interface Tag {
   name: string;
 }
 
-export type TabType = "entity" | "relationship" | "orbit" | "space";
+export type TabType = "node" | "relationship" | "orbit" | "space";
 
 export interface Tab {
   id: string;
   type: TabType;
 }
 
-export type NoteTargetType = "space" | "orbit" | "entity" | "relationship";
+export type NoteTargetType = "space" | "orbit" | "node" | "relationship";
 
-// Space/Orbit/Entity share the same tags/metadata shape (Relationship also has tags/metadata,
+// Space/Orbit/Node share the same tags/metadata shape (Relationship also has tags/metadata,
 // per plan.md decision #11, but isn't part of GroupDetails' shared rendering path since it has
 // no name/label and its own bespoke InfoPanel layout).
-export type GroupTargetType = "space" | "orbit" | "entity";
+export type GroupTargetType = "space" | "orbit" | "node";

@@ -13,9 +13,9 @@ import {
 } from "@/components/ui/combobox";
 import { searchAll, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { NodeIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { TagObjectsDialog } from "./TagObjectsDialog";
-import { isEntityVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
+import { isNodeVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
 import { useViewStore } from "./viewStore";
 
 const RESULT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
@@ -26,8 +26,8 @@ function ResultIcon({ type }: { type: SearchResult["type"] }) {
       return <SpaceIcon className={RESULT_ICON_CLASS} />;
     case "orbit":
       return <OrbitIcon className={RESULT_ICON_CLASS} />;
-    case "entity":
-      return <EntityIcon className={RESULT_ICON_CLASS} />;
+    case "node":
+      return <NodeIcon className={RESULT_ICON_CLASS} />;
     case "tag":
       return <TagIcon className={RESULT_ICON_CLASS} />;
   }
@@ -44,7 +44,7 @@ const SECTIONS: { type: SearchResult["type"]; label: string }[] = [
   { type: "tag", label: "Tags" },
   { type: "space", label: "Spaces" },
   { type: "orbit", label: "Orbits" },
-  { type: "entity", label: "Entities" },
+  { type: "node", label: "Nodes" },
 ];
 
 export function SidebarSearch({ projectId }: { projectId: string }) {
@@ -58,7 +58,7 @@ export function SidebarSearch({ projectId }: { projectId: string }) {
   // query) actually change avoids that entirely.
   const spaces = useModelStore((state) => state.spaces);
   const orbits = useModelStore((state) => state.orbits);
-  const entities = useModelStore((state) => state.entities);
+  const nodes = useModelStore((state) => state.nodes);
   const tags = useModelStore((state) => state.tags);
   const focusOn = useViewStore((state) => state.focusOn);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
@@ -66,8 +66,8 @@ export function SidebarSearch({ projectId }: { projectId: string }) {
 
   const results = useMemo(() => {
     if (!query.trim()) return [];
-    return searchAll({ spaces, orbits, entities, tags }, query, projectId);
-  }, [query, spaces, orbits, entities, tags, projectId]);
+    return searchAll({ spaces, orbits, nodes, tags }, query, projectId);
+  }, [query, spaces, orbits, nodes, tags, projectId]);
 
   const sections = useMemo(
     () =>
@@ -95,7 +95,7 @@ export function SidebarSearch({ projectId }: { projectId: string }) {
         ? isSpaceVisible(hiddenSpaceIds, result.id)
         : result.type === "orbit"
           ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
-          : isEntityVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
+          : isNodeVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
     if (visible) focusOn(result.id, result.type);
     setQuery("");
   };
@@ -118,7 +118,7 @@ export function SidebarSearch({ projectId }: { projectId: string }) {
         openOnInputClick={false}
       >
         <ComboboxInput
-          placeholder="Search entities, orbits, spaces, tags…"
+          placeholder="Search nodes, orbits, spaces, tags…"
           showTrigger={false}
         />
         <ComboboxContent>

@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 // Generic destructive-action confirmation, shared by every delete entry point (sidebar context
-// menu for space/orbit/entity, InfoPanel for relationship) — same "shared shape, shared rendering
+// menu for space/orbit/node, InfoPanel for relationship) — same "shared shape, shared rendering
 // path" spirit as CreateDialog, with each call site composing its own cascade-count description.
 export function DeleteConfirmDialog({
   open,

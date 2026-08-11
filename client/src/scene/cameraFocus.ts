@@ -5,12 +5,12 @@ import type { Vector3 } from "@/store/types";
 import { computeOrbitRadius, computeSpaceRadius } from "./bounds";
 import { isRelationshipVisible } from "./edgeVisibility";
 import type { FocusTarget } from "./viewStore";
-import { isEntityVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
+import { isNodeVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
 
 export const DEFAULT_FOCUS_TARGET: Vector3 = { x: 0, y: 0, z: 0 };
 export const DEFAULT_CAMERA_POSITION: Vector3 = { x: 18, y: 14, z: 22 };
 
-const ENTITY_FOCUS_DISTANCE = 6;
+const NODE_FOCUS_DISTANCE = 6;
 const ORBIT_FOCUS_MARGIN = 3;
 const ORBIT_FOCUS_RADIUS_FACTOR = 2.2;
 const SPACE_FOCUS_MARGIN = 4;
@@ -49,11 +49,11 @@ function orbitFocus(state: ModelState, orbitId: string): CameraFocus {
   };
 }
 
-function entityFocus(state: ModelState, entityId: string): CameraFocus {
+function nodeFocus(state: ModelState, nodeId: string): CameraFocus {
   return {
-    key: `entity:${entityId}`,
-    target: getWorldPosition(state, entityId),
-    distance: ENTITY_FOCUS_DISTANCE,
+    key: `node:${nodeId}`,
+    target: getWorldPosition(state, nodeId),
+    distance: NODE_FOCUS_DISTANCE,
   };
 }
 
@@ -69,7 +69,7 @@ function relationshipFocus(state: ModelState, relationshipId: string): CameraFoc
   };
 }
 
-// Resolves an explicit focus request (space/orbit/entity/relationship) — from a sidebar row or
+// Resolves an explicit focus request (space/orbit/node/relationship) — from a sidebar row or
 // a single click on an object in the 3D scene — independent of tabs. Reuses the same key format
 // as the tab-based branches below so refocusing an object that's also the active tab is a no-op
 // rather than a redundant re-tween. A hidden target resolves to null (falls through to the
@@ -89,8 +89,8 @@ function resolveExplicitFocus(
     return orbitFocus(state, target.id);
   }
 
-  if (target.type === "entity" && isEntityVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return entityFocus(state, target.id);
+  if (target.type === "node" && isNodeVisible(state, target.id, hiddenSpaceIds, hiddenOrbitIds)) {
+    return nodeFocus(state, target.id);
   }
 
   if (
@@ -111,7 +111,7 @@ function resolveExplicitFocus(
 // can do from a snapshot alone. An explicit focus request wins over the active tab so a
 // sidebar click can move the camera without disturbing whichever tab/panel is already open.
 //
-// Every branch below is gated by hidden-space/orbit state (via isEntityVisible/isOrbitVisible/
+// Every branch below is gated by hidden-space/orbit state (via isNodeVisible/isOrbitVisible/
 // isRelationshipVisible) — a hidden object falls through to the next branch exactly like a
 // stale/deleted one, so toggling something invisible can never leave the camera pointed at it.
 export function resolveCameraFocus(
@@ -133,8 +133,8 @@ export function resolveCameraFocus(
   const tab = state.openTabs.find((t) => t.id === state.activeTabId);
   if (!tab) return defaultFocus(resetViewToken);
 
-  if (tab.type === "entity" && isEntityVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
-    return entityFocus(state, tab.id);
+  if (tab.type === "node" && isNodeVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
+    return nodeFocus(state, tab.id);
   }
 
   if (tab.type === "orbit" && isOrbitVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {

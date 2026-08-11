@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 // Presentational, same division of responsibility as TagEditor — callers bind the right store
-// action (updateSpaceMetadata/updateOrbitMetadata/updateEntityMetadata) into onUpdate. Values are
+// action (updateSpaceMetadata/updateOrbitMetadata/updateNodeMetadata) into onUpdate. Values are
 // always written back as strings from the text input; a number only survives here if it was set
 // programmatically (e.g. seed data) and never touched through this editor.
 export function MetadataEditor({

@@ -2,8 +2,8 @@ import { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { objectsForTag, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
-import { isEntityVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
+import { NodeIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { isNodeVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
 import { useViewStore } from "./viewStore";
 
 const OBJECT_ICON_CLASS = "size-4 p-0.5 shrink-0 rounded-full";
@@ -14,8 +14,8 @@ function ObjectIcon({ type }: { type: SearchResult["type"] }) {
       return <SpaceIcon className={OBJECT_ICON_CLASS} />;
     case "orbit":
       return <OrbitIcon className={OBJECT_ICON_CLASS} />;
-    case "entity":
-      return <EntityIcon className={OBJECT_ICON_CLASS} />;
+    case "node":
+      return <NodeIcon className={OBJECT_ICON_CLASS} />;
     case "tag":
       return null;
   }
@@ -25,7 +25,7 @@ function ObjectIcon({ type }: { type: SearchResult["type"] }) {
 // TagBrowserDialog's job, retired in favor of folding tag search into the main search box).
 // Clicking an object row focuses the camera exactly like a SidebarTree row click: same
 // visibility-gated focusOn, cascading through parent space/orbit (isSpaceVisible/isOrbitVisible/
-// isEntityVisible from visibility.ts) rather than SidebarTree's own slightly-inconsistent inline
+// isNodeVisible from visibility.ts) rather than SidebarTree's own slightly-inconsistent inline
 // check (its OrbitRow only looks at the orbit's own hidden flag, not its parent space's) —
 // deliberately using the more-correct cascading version here per explicit direction.
 export function TagObjectsDialog({
@@ -37,7 +37,7 @@ export function TagObjectsDialog({
 }) {
   const spaces = useModelStore((state) => state.spaces);
   const orbits = useModelStore((state) => state.orbits);
-  const entities = useModelStore((state) => state.entities);
+  const nodes = useModelStore((state) => state.nodes);
   const focusOn = useViewStore((state) => state.focusOn);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
@@ -46,8 +46,8 @@ export function TagObjectsDialog({
   // the raw (stable) Maps rather than as a Zustand selector, so there's no getSnapshot-instability
   // risk (see the fix in TagBrowserDialog's history for the same class of bug via tagsInProject).
   const objects = useMemo(
-    () => (tag ? objectsForTag({ spaces, orbits, entities }, tag.id) : []),
-    [tag, spaces, orbits, entities],
+    () => (tag ? objectsForTag({ spaces, orbits, nodes }, tag.id) : []),
+    [tag, spaces, orbits, nodes],
   );
 
   const selectObject = (result: SearchResult) => {
@@ -58,7 +58,7 @@ export function TagObjectsDialog({
         ? isSpaceVisible(hiddenSpaceIds, result.id)
         : result.type === "orbit"
           ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
-          : isEntityVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
+          : isNodeVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
     if (!visible) return;
     focusOn(result.id, result.type);
     onOpenChange(false);

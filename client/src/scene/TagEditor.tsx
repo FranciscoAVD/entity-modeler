@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 // Presentational — knows nothing about the store or which object type it's attached to;
-// callers bind the right store action (updateSpaceTags/updateOrbitTags/updateEntityTags) into
+// callers bind the right store action (updateSpaceTags/updateOrbitTags/updateNodeTags) into
 // onUpdate. Existing tags render as removable chips; a small input appends new ones.
 //
 // existingTags (the project's full tag-name list, plan.md decision #11's "planned but not

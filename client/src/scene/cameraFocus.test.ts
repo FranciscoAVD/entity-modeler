@@ -9,7 +9,7 @@ beforeEach(() => {
     projects: new Map(),
     spaces: new Map(),
     orbits: new Map(),
-    entities: new Map(),
+    nodes: new Map(),
     relationships: new Map(),
     openTabs: [],
     activeTabId: null,
@@ -23,15 +23,15 @@ describe("resolveCameraFocus", () => {
     expect(focus.key).toBe("reset:0");
   });
 
-  it("focuses the active entity tab", () => {
-    const { addProject, addSpace, addEntity, openTab } = useModelStore.getState();
+  it("focuses the active node tab", () => {
+    const { addProject, addSpace, addNode, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S", origin: { x: 10, y: 0, z: 0 } });
-    const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
-    openTab(entityId, "entity");
+    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
+    openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
-    expect(focus.key).toBe(`entity:${entityId}`);
+    expect(focus.key).toBe(`node:${nodeId}`);
     expect(focus.target).toEqual({ x: 11, y: 0, z: 0 });
   });
 
@@ -55,11 +55,11 @@ describe("resolveCameraFocus", () => {
   });
 
   it("focuses the midpoint of an active relationship tab", () => {
-    const { addProject, addSpace, addEntity, addRelationship, openTab } = useModelStore.getState();
+    const { addProject, addSpace, addNode, addRelationship, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const a = addEntity({ spaceId, name: "A", position: { x: 0, y: 0, z: 0 } });
-    const b = addEntity({ spaceId, name: "B", position: { x: 10, y: 0, z: 0 } });
+    const a = addNode({ spaceId, name: "A", position: { x: 0, y: 0, z: 0 } });
+    const b = addNode({ spaceId, name: "B", position: { x: 10, y: 0, z: 0 } });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
     openTab(relId, "relationship");
 
@@ -71,11 +71,11 @@ describe("resolveCameraFocus", () => {
 
   // Regression: reset used to be silently overridden by whichever tab was still active.
   it("resetRequested overrides an active tab", () => {
-    const { addProject, addSpace, addEntity, openTab } = useModelStore.getState();
+    const { addProject, addSpace, addNode, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const entityId = addEntity({ spaceId, name: "E" });
-    openTab(entityId, "entity");
+    const nodeId = addNode({ spaceId, name: "E" });
+    openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(useModelStore.getState(), 1, true, null, false, NONE, NONE);
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
@@ -104,12 +104,12 @@ describe("resolveCameraFocus", () => {
   // Sidebar clicks (focusOn) must move the camera without disturbing whichever tab/panel is
   // already open — an explicit focus request wins over the active tab.
   it("an explicit focus request overrides an active tab", () => {
-    const { addProject, addSpace, addEntity, addOrbit, openTab } = useModelStore.getState();
+    const { addProject, addSpace, addNode, addOrbit, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const entityId = addEntity({ spaceId, name: "E" });
+    const nodeId = addNode({ spaceId, name: "E" });
     const orbitId = addOrbit({ spaceId, name: "O" });
-    openTab(entityId, "entity");
+    openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),
@@ -126,12 +126,12 @@ describe("resolveCameraFocus", () => {
   // focusRequested is only true in the render right after focusOn fires — a stale focusTarget
   // left over from a prior click must not keep overriding the active tab on every re-render.
   it("falls back to the active tab when focusTarget is stale (not freshly requested)", () => {
-    const { addProject, addSpace, addEntity, addOrbit, openTab } = useModelStore.getState();
+    const { addProject, addSpace, addNode, addOrbit, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const entityId = addEntity({ spaceId, name: "E" });
+    const nodeId = addNode({ spaceId, name: "E" });
     const orbitId = addOrbit({ spaceId, name: "O" });
-    openTab(entityId, "entity");
+    openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),
@@ -142,22 +142,22 @@ describe("resolveCameraFocus", () => {
       NONE,
       NONE,
     );
-    expect(focus.key).toBe(`entity:${entityId}`);
+    expect(focus.key).toBe(`node:${nodeId}`);
   });
 
   // The concrete bug: hiding an object (or clicking a hidden row/search result) must never
   // leave the camera pointed at it — there's nothing rendered there to look at.
   it("does not focus an explicit target whose space is hidden", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const entityId = addEntity({ spaceId, name: "E" });
+    const nodeId = addNode({ spaceId, name: "E" });
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),
       0,
       false,
-      { id: entityId, type: "entity" },
+      { id: nodeId, type: "node" },
       true,
       new Set([spaceId]),
       NONE,
@@ -165,12 +165,12 @@ describe("resolveCameraFocus", () => {
     expect(focus.target).toEqual(DEFAULT_FOCUS_TARGET);
   });
 
-  it("falls back to the overview when the active tab's entity becomes hidden", () => {
-    const { addProject, addSpace, addEntity, openTab } = useModelStore.getState();
+  it("falls back to the overview when the active tab's node becomes hidden", () => {
+    const { addProject, addSpace, addNode, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const entityId = addEntity({ spaceId, name: "E" });
-    openTab(entityId, "entity");
+    const nodeId = addNode({ spaceId, name: "E" });
+    openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),

@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { subtract } from "@/lib/vector3";
-import { getOrbitWorldOrigin, getWorldPosition, projectIdForEntity, spacesInProject } from "./selectors";
+import { getOrbitWorldOrigin, getWorldPosition, projectIdForNode, spacesInProject } from "./selectors";
 import type {
   Cardinality,
-  Entity,
+  Node,
   Note,
   NoteTargetType,
   Orbit,
@@ -22,7 +22,7 @@ export interface ModelState {
   projects: Map<string, Project>;
   spaces: Map<string, Space>;
   orbits: Map<string, Orbit>;
-  entities: Map<string, Entity>;
+  nodes: Map<string, Node>;
   relationships: Map<string, Relationship>;
   tags: Map<string, Tag>;
 
@@ -48,7 +48,7 @@ export interface ModelActions {
     tags?: string[];
     metadata?: Record<string, string | number>;
   }): string;
-  addEntity(input: {
+  addNode(input: {
     spaceId: string;
     orbitId?: string;
     name: string;
@@ -69,21 +69,21 @@ export interface ModelActions {
     endpoints: { sourceId: string; targetId: string },
   ): void;
 
-  moveEntity(entityId: string, target: { spaceId: string; orbitId?: string }): void;
-  updateEntityPosition(entityId: string, position: Vector3): void;
+  moveNode(nodeId: string, target: { spaceId: string; orbitId?: string }): void;
+  updateNodePosition(nodeId: string, position: Vector3): void;
   renameSpace(spaceId: string, name: string): void;
   renameOrbit(orbitId: string, name: string): void;
-  renameEntity(entityId: string, name: string): void;
+  renameNode(nodeId: string, name: string): void;
 
   updateSpaceTags(spaceId: string, tags: string[]): void;
   updateOrbitTags(orbitId: string, tags: string[]): void;
-  updateEntityTags(entityId: string, tags: string[]): void;
+  updateNodeTags(nodeId: string, tags: string[]): void;
   updateRelationshipTags(relationshipId: string, tags: string[]): void;
   renameTag(tagId: string, name: string): void;
   deleteTag(tagId: string): void;
   updateSpaceMetadata(spaceId: string, metadata: Record<string, string | number> | undefined): void;
   updateOrbitMetadata(orbitId: string, metadata: Record<string, string | number> | undefined): void;
-  updateEntityMetadata(entityId: string, metadata: Record<string, string | number> | undefined): void;
+  updateNodeMetadata(nodeId: string, metadata: Record<string, string | number> | undefined): void;
   updateRelationshipMetadata(
     relationshipId: string,
     metadata: Record<string, string | number> | undefined,
@@ -92,7 +92,7 @@ export interface ModelActions {
   deleteProject(projectId: string): void;
   deleteSpace(spaceId: string): void;
   deleteOrbit(orbitId: string): void;
-  deleteEntity(entityId: string): void;
+  deleteNode(nodeId: string): void;
   deleteRelationship(relationshipId: string): void;
 
   addNote(
@@ -140,7 +140,7 @@ function pruneTabs(
 // Resolves user-typed tag names (from TagEditor, or an add*'s `tags` input) against the tag
 // registry (plan.md decision #11), scoped to a single project — reusing an existing tag in that
 // project (matched case-insensitively) if one exists, creating it otherwise. This is the
-// "normalize on write" step: every space/orbit/entity/relationship ends up referencing tags by
+// "normalize on write" step: every space/orbit/node/relationship ends up referencing tags by
 // id, so renaming a tag only ever touches the registry once instead of every object that
 // carries it. Tag identity is (projectId, name) — the same name in a different project resolves
 // to a different tag entirely, never reused across projects.
@@ -200,8 +200,8 @@ function notesPatch(
       return { spaces: withNotes(state.spaces, targetId, updater) };
     case "orbit":
       return { orbits: withNotes(state.orbits, targetId, updater) };
-    case "entity":
-      return { entities: withNotes(state.entities, targetId, updater) };
+    case "node":
+      return { nodes: withNotes(state.nodes, targetId, updater) };
     case "relationship":
       return { relationships: withNotes(state.relationships, targetId, updater) };
   }
@@ -211,7 +211,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   projects: new Map(),
   spaces: new Map(),
   orbits: new Map(),
-  entities: new Map(),
+  nodes: new Map(),
   relationships: new Map(),
   tags: new Map(),
   openTabs: [],
@@ -268,7 +268,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     return id;
   },
 
-  addEntity({ spaceId, orbitId, name, tags, position, metadata }) {
+  addNode({ spaceId, orbitId, name, tags, position, metadata }) {
     const state = get();
     const parentSpace = state.spaces.get(spaceId);
     if (!parentSpace) throw new Error(`Space not found: ${spaceId}`);
@@ -282,8 +282,8 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
 
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], parentSpace.projectId);
     const id = crypto.randomUUID();
-    const entities = new Map(state.entities);
-    entities.set(id, {
+    const nodes = new Map(state.nodes);
+    nodes.set(id, {
       id,
       spaceId,
       orbitId,
@@ -293,19 +293,19 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       notes: [],
       metadata,
     });
-    set({ entities, tags: nextTags });
+    set({ nodes, tags: nextTags });
     return id;
   },
 
   addRelationship({ sourceId, targetId, cardinality, tags, metadata }) {
-    if (sourceId === targetId) throw new Error("A relationship cannot connect an entity to itself");
+    if (sourceId === targetId) throw new Error("A relationship cannot connect a node to itself");
 
     const state = get();
-    if (!state.entities.has(sourceId)) throw new Error(`Entity not found: ${sourceId}`);
-    if (!state.entities.has(targetId)) throw new Error(`Entity not found: ${targetId}`);
+    if (!state.nodes.has(sourceId)) throw new Error(`Node not found: ${sourceId}`);
+    if (!state.nodes.has(targetId)) throw new Error(`Node not found: ${targetId}`);
 
-    const projectId = projectIdForEntity(state, sourceId);
-    if (!projectId) throw new Error(`Project not found for entity: ${sourceId}`);
+    const projectId = projectIdForNode(state, sourceId);
+    if (!projectId) throw new Error(`Project not found for node: ${sourceId}`);
 
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], projectId);
     const id = crypto.randomUUID();
@@ -334,23 +334,23 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   },
 
   updateRelationshipEndpoints(relationshipId, { sourceId, targetId }) {
-    if (sourceId === targetId) throw new Error("A relationship cannot connect an entity to itself");
+    if (sourceId === targetId) throw new Error("A relationship cannot connect a node to itself");
 
     const state = get();
     const relationship = state.relationships.get(relationshipId);
     if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
-    if (!state.entities.has(sourceId)) throw new Error(`Entity not found: ${sourceId}`);
-    if (!state.entities.has(targetId)) throw new Error(`Entity not found: ${targetId}`);
+    if (!state.nodes.has(sourceId)) throw new Error(`Node not found: ${sourceId}`);
+    if (!state.nodes.has(targetId)) throw new Error(`Node not found: ${targetId}`);
 
     const relationships = new Map(state.relationships);
     relationships.set(relationshipId, { ...relationship, sourceId, targetId });
     set({ relationships });
   },
 
-  moveEntity(entityId, { spaceId, orbitId }) {
+  moveNode(nodeId, { spaceId, orbitId }) {
     const state = get();
-    const entity = state.entities.get(entityId);
-    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+    const node = state.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
     const newSpace = state.spaces.get(spaceId);
     if (!newSpace) throw new Error(`Space not found: ${spaceId}`);
     if (orbitId !== undefined) {
@@ -361,27 +361,27 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       }
     }
 
-    // Re-base position so the entity's *world* position is preserved across the move — its old
+    // Re-base position so the node's *world* position is preserved across the move — its old
     // local offset was relative to the old parent's origin, and would otherwise be silently
-    // reinterpreted against the new one. Relationships reference entities by id and are never
+    // reinterpreted against the new one. Relationships reference nodes by id and are never
     // touched by a move.
-    const worldPosition = getWorldPosition(state, entityId);
+    const worldPosition = getWorldPosition(state, nodeId);
     const newParentOrigin = orbitId !== undefined ? getOrbitWorldOrigin(state, orbitId) : newSpace.origin;
     const position = subtract(worldPosition, newParentOrigin);
 
-    const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, spaceId, orbitId, position });
-    set({ entities });
+    const nodes = new Map(state.nodes);
+    nodes.set(nodeId, { ...node, spaceId, orbitId, position });
+    set({ nodes });
   },
 
-  updateEntityPosition(entityId, position) {
+  updateNodePosition(nodeId, position) {
     const state = get();
-    const entity = state.entities.get(entityId);
-    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+    const node = state.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
 
-    const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, position });
-    set({ entities });
+    const nodes = new Map(state.nodes);
+    nodes.set(nodeId, { ...node, position });
+    set({ nodes });
   },
 
   renameSpace(spaceId, name) {
@@ -404,14 +404,14 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     set({ orbits });
   },
 
-  renameEntity(entityId, name) {
+  renameNode(nodeId, name) {
     const state = get();
-    const entity = state.entities.get(entityId);
-    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+    const node = state.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
 
-    const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, name });
-    set({ entities });
+    const nodes = new Map(state.nodes);
+    nodes.set(nodeId, { ...node, name });
+    set({ nodes });
   },
 
   updateSpaceTags(spaceId, tags) {
@@ -438,25 +438,25 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     set({ orbits, tags: nextTags });
   },
 
-  updateEntityTags(entityId, tags) {
+  updateNodeTags(nodeId, tags) {
     const state = get();
-    const entity = state.entities.get(entityId);
-    if (!entity) throw new Error(`Entity not found: ${entityId}`);
-    const parentSpace = state.spaces.get(entity.spaceId);
-    if (!parentSpace) throw new Error(`Space not found: ${entity.spaceId}`);
+    const node = state.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
+    const parentSpace = state.spaces.get(node.spaceId);
+    if (!parentSpace) throw new Error(`Space not found: ${node.spaceId}`);
 
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, parentSpace.projectId);
-    const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, tagIds });
-    set({ entities, tags: nextTags });
+    const nodes = new Map(state.nodes);
+    nodes.set(nodeId, { ...node, tagIds });
+    set({ nodes, tags: nextTags });
   },
 
   updateRelationshipTags(relationshipId, tags) {
     const state = get();
     const relationship = state.relationships.get(relationshipId);
     if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
-    const projectId = projectIdForEntity(state, relationship.sourceId);
-    if (!projectId) throw new Error(`Project not found for entity: ${relationship.sourceId}`);
+    const projectId = projectIdForNode(state, relationship.sourceId);
+    if (!projectId) throw new Error(`Project not found for node: ${relationship.sourceId}`);
 
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags, projectId);
     const relationships = new Map(state.relationships);
@@ -464,7 +464,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     set({ relationships, tags: nextTags });
   },
 
-  // Renaming only ever touches the registry — every space/orbit/entity/relationship references
+  // Renaming only ever touches the registry — every space/orbit/node/relationship references
   // the tag by id, so they all pick up the new name for free. This is the payoff of normalizing.
   renameTag(tagId, name) {
     const state = get();
@@ -514,7 +514,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
       tags,
       spaces: stripTag(state.spaces),
       orbits: stripTag(state.orbits),
-      entities: stripTag(state.entities),
+      nodes: stripTag(state.nodes),
       relationships: stripTag(state.relationships),
     });
   },
@@ -539,14 +539,14 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     set({ orbits });
   },
 
-  updateEntityMetadata(entityId, metadata) {
+  updateNodeMetadata(nodeId, metadata) {
     const state = get();
-    const entity = state.entities.get(entityId);
-    if (!entity) throw new Error(`Entity not found: ${entityId}`);
+    const node = state.nodes.get(nodeId);
+    if (!node) throw new Error(`Node not found: ${nodeId}`);
 
-    const entities = new Map(state.entities);
-    entities.set(entityId, { ...entity, metadata });
-    set({ entities });
+    const nodes = new Map(state.nodes);
+    nodes.set(nodeId, { ...node, metadata });
+    set({ nodes });
   },
 
   updateRelationshipMetadata(relationshipId, metadata) {
@@ -589,12 +589,12 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const orbitIds = new Set(
       [...state.orbits.values()].filter((o) => o.spaceId === spaceId).map((o) => o.id),
     );
-    const entityIds = new Set(
-      [...state.entities.values()].filter((e) => e.spaceId === spaceId).map((e) => e.id),
+    const nodeIds = new Set(
+      [...state.nodes.values()].filter((e) => e.spaceId === spaceId).map((e) => e.id),
     );
     const relationshipIds = new Set(
       [...state.relationships.values()]
-        .filter((r) => entityIds.has(r.sourceId) || entityIds.has(r.targetId))
+        .filter((r) => nodeIds.has(r.sourceId) || nodeIds.has(r.targetId))
         .map((r) => r.id),
     );
 
@@ -604,16 +604,16 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const orbits = new Map(state.orbits);
     for (const id of orbitIds) orbits.delete(id);
 
-    const entities = new Map(state.entities);
-    for (const id of entityIds) entities.delete(id);
+    const nodes = new Map(state.nodes);
+    for (const id of nodeIds) nodes.delete(id);
 
     const relationships = new Map(state.relationships);
     for (const id of relationshipIds) relationships.delete(id);
 
-    const removedTabIds = new Set([spaceId, ...orbitIds, ...entityIds, ...relationshipIds]);
+    const removedTabIds = new Set([spaceId, ...orbitIds, ...nodeIds, ...relationshipIds]);
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, removedTabIds);
 
-    set({ spaces, orbits, entities, relationships, openTabs, activeTabId });
+    set({ spaces, orbits, nodes, relationships, openTabs, activeTabId });
   },
 
   deleteOrbit(orbitId) {
@@ -623,37 +623,37 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
     const orbits = new Map(state.orbits);
     orbits.delete(orbitId);
 
-    // Entities aren't owned by their orbit (space is the required parent), so they're
+    // Nodes aren't owned by their orbit (space is the required parent), so they're
     // reassigned to orbit-less rather than deleted — avoids a dangling orbitId reference.
-    const entities = new Map(state.entities);
-    for (const entity of state.entities.values()) {
-      if (entity.orbitId === orbitId) entities.set(entity.id, { ...entity, orbitId: undefined });
+    const nodes = new Map(state.nodes);
+    for (const node of state.nodes.values()) {
+      if (node.orbitId === orbitId) nodes.set(node.id, { ...node, orbitId: undefined });
     }
 
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, new Set([orbitId]));
 
-    set({ orbits, entities, openTabs, activeTabId });
+    set({ orbits, nodes, openTabs, activeTabId });
   },
 
-  deleteEntity(entityId) {
+  deleteNode(nodeId) {
     const state = get();
-    if (!state.entities.has(entityId)) throw new Error(`Entity not found: ${entityId}`);
+    if (!state.nodes.has(nodeId)) throw new Error(`Node not found: ${nodeId}`);
 
-    const entities = new Map(state.entities);
-    entities.delete(entityId);
+    const nodes = new Map(state.nodes);
+    nodes.delete(nodeId);
 
     const relationshipIds = new Set(
       [...state.relationships.values()]
-        .filter((r) => r.sourceId === entityId || r.targetId === entityId)
+        .filter((r) => r.sourceId === nodeId || r.targetId === nodeId)
         .map((r) => r.id),
     );
     const relationships = new Map(state.relationships);
     for (const id of relationshipIds) relationships.delete(id);
 
-    const removedTabIds = new Set([entityId, ...relationshipIds]);
+    const removedTabIds = new Set([nodeId, ...relationshipIds]);
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, removedTabIds);
 
-    set({ entities, relationships, openTabs, activeTabId });
+    set({ nodes, relationships, openTabs, activeTabId });
   },
 
   deleteRelationship(relationshipId) {
@@ -675,7 +675,7 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   },
 
   addNote(targetType, targetId, note) {
-    // Relationship notes are prose-only — no structured metadata bag (unlike Space/Orbit/Entity
+    // Relationship notes are prose-only — no structured metadata bag (unlike Space/Orbit/Node
     // notes), since a relationship has no natural place for the kind of structured data
     // (subnet CIDR/VLAN, etc.) that bag exists for.
     if (targetType === "relationship" && note.metadata !== undefined) {

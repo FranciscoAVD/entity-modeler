@@ -20,15 +20,15 @@ export function isOrbitVisible(
   return isSpaceVisible(hiddenSpaceIds, orbit.spaceId);
 }
 
-export function isEntityVisible(
+export function isNodeVisible(
   state: ModelState,
-  entityId: string,
+  nodeId: string,
   hiddenSpaceIds: ReadonlySet<string>,
   hiddenOrbitIds: ReadonlySet<string>,
 ): boolean {
-  const entity = state.entities.get(entityId);
-  if (!entity) return false;
-  if (hiddenSpaceIds.has(entity.spaceId)) return false;
-  if (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId)) return false;
+  const node = state.nodes.get(nodeId);
+  if (!node) return false;
+  if (hiddenSpaceIds.has(node.spaceId)) return false;
+  if (node.orbitId !== undefined && hiddenOrbitIds.has(node.orbitId)) return false;
   return true;
 }

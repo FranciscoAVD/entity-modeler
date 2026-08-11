@@ -1,6 +1,6 @@
 # Progress recap
 
-Status as of 2026-08-10. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
+Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono, unused so far). 102 tests passing, build/lint clean. Full
 plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
 9 → 10 → 11`.
@@ -808,6 +808,55 @@ below, causing an infinite render loop. Fixed by wrapping in `useShallow` (harml
   verification done this session (per standing preference) — worth checking the grouped dropdown,
   the tag-click dialog, and that a hidden object's row inside that dialog is correctly
   non-clickable/greyed before treating this as done.
+
+**`Entity` renamed to `Node` throughout the client project** (not a plan.md phase —
+naming consistency, touches nearly every file in `client/src`; `plan.md` itself
+updated to match, see below)
+User-requested rename, closing a naming inconsistency that had been building for a
+while: `plan.md`'s data model still called the type `Entity`, but user-facing UI text
+had already drifted to "node" in several places (`Sidebar.tsx`'s create-dialog said
+"New node"/"Node name", `SidebarTree.tsx`'s context-menu items said "Rename node"/
+"Delete node") — this pass makes the internal identifiers match what the UI already
+called the concept.
+- Mechanical, not just the type: `Entity` (interface) → `Node`, `entities` (store Map)
+  → `nodes`, and every derived identifier — `addEntity`/`deleteEntity`/`moveEntity`/
+  `renameEntity`/`updateEntityTags`/`updateEntityMetadata`/`updateEntityPosition`
+  (`store.ts`), `entitiesInSpace`/`entitiesInOrbit`/`ungroupedEntitiesInSpace`/
+  `relationshipsForEntity`/`projectIdForEntity`/`entityDeleteImpact` (`selectors.ts`),
+  `isEntityVisible` (`visibility.ts`), `EntityIcon`/`ENTITY_COLOR` (`SidebarTypeIcons.tsx`),
+  the `"entity"` string-literal tags used for `TabType`/`NoteTargetType`/
+  `GroupTargetType`/`FocusableType`/userData raycast tags, and the `--entity`/
+  `--color-entity`/`bg-entity`/`text-entity` CSS custom properties and Tailwind
+  classes (`index.css`). ~650 lines changed across 34 files, symmetric
+  insertions/deletions (confirmed via `git diff --stat`) — every changed line was a
+  1:1 rename, not a restructure.
+- **File renames**: `EntityNode.tsx` → `Node.tsx`, `MoveEntityDialog.tsx` →
+  `MoveNodeDialog.tsx`. `EntityNode.tsx`'s component was itself named after the old
+  type (`Entity` the data → rendered as a "Node" in the graph sense) — once the data
+  type became `Node` too, keeping a `Node` component in a `Node.tsx` file was a
+  deliberate, explicit choice confirmed with the user (a type and a value can share an
+  identifier in TS, resolved by position — `import type { Node } from "@/store/types"`
+  alongside `function Node({ node }: { node: Node })` — rather than inventing a
+  different name like `NodeSphere`/`NodeMesh` to sidestep the collision).
+- Applied via a word-boundary-safe `sed` script (`\bEntity\b`/`\bentity\b` for
+  standalone words, plain substring for camelCase compounds like `addEntity` since
+  `Entity`'s capital `E` never collides with `identity`/`Identity` — lowercase `e`
+  there), with `EntityNode` special-cased first so it collapsed to `Node` rather than
+  doubling to `NodeNode`. Caught and fixed one class of bug the mechanical pass
+  introduced: grammar drift on the indefinite article (`"an entity"` → `"an node"`,
+  since "node" starts with a consonant sound) in several error messages and comments —
+  swept separately after the main rename, `grep -rn "an node"` before/after used to
+  verify.
+- `plan.md` updated in the same pass — same rename applied throughout (data model,
+  decision list, phase plan, open questions), including the doc's own title ("3D
+  Entity Relationship Modeler" → "3D Node Relationship Modeler"). Unlike this file
+  (a chronological log, left as-is for historical accuracy — old entries below still
+  say "Entity" because that was its name at the time), `plan.md` documents current
+  design only, so it was fully brought in line rather than partially.
+- Verified: `tsc -b`, `vite build`, and `oxlint` all clean (same 4 pre-existing
+  fast-refresh warnings as before, unrelated to this change); all 102 tests still
+  passing, no test assertions needed updating beyond the mechanical rename itself. No
+  browser verification done — purely a rename, no behavioral change.
 
 ## TODO — remaining phases
 

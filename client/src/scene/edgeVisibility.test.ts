@@ -7,7 +7,7 @@ beforeEach(() => {
     projects: new Map(),
     spaces: new Map(),
     orbits: new Map(),
-    entities: new Map(),
+    nodes: new Map(),
     relationships: new Map(),
     openTabs: [],
     activeTabId: null,
@@ -15,12 +15,12 @@ beforeEach(() => {
 });
 
 function seedRelationship(orbitId?: string) {
-  const { addProject, addSpace, addOrbit, addEntity, addRelationship } = useModelStore.getState();
+  const { addProject, addSpace, addOrbit, addNode, addRelationship } = useModelStore.getState();
   const projectId = addProject({ name: "P" });
   const spaceId = addSpace({ projectId, name: "S" });
   const resolvedOrbitId = orbitId ?? addOrbit({ spaceId, name: "O" });
-  const a = addEntity({ spaceId, orbitId: resolvedOrbitId, name: "A" });
-  const b = addEntity({ spaceId, orbitId: resolvedOrbitId, name: "B" });
+  const a = addNode({ spaceId, orbitId: resolvedOrbitId, name: "A" });
+  const b = addNode({ spaceId, orbitId: resolvedOrbitId, name: "B" });
   const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
   return { spaceId, orbitId: resolvedOrbitId, relId };
 }
@@ -53,12 +53,12 @@ describe("isRelationshipVisible", () => {
   });
 
   it("is hidden if only one endpoint's orbit is hidden", () => {
-    const { addProject, addSpace, addOrbit, addEntity, addRelationship } = useModelStore.getState();
+    const { addProject, addSpace, addOrbit, addNode, addRelationship } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const orbitA = addOrbit({ spaceId, name: "OA" });
-    const a = addEntity({ spaceId, orbitId: orbitA, name: "A" });
-    const b = addEntity({ spaceId, name: "Ungrouped" });
+    const a = addNode({ spaceId, orbitId: orbitA, name: "A" });
+    const b = addNode({ spaceId, name: "Ungrouped" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(

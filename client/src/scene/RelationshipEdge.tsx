@@ -8,18 +8,18 @@ import { useModelStore } from "@/store/store";
 import type { Cardinality, Relationship } from "@/store/types";
 import { computeEdgeControlPoint, trimEdgeEndpoints } from "./edgeGeometry";
 import { isRelationshipVisible } from "./edgeVisibility";
-import { ENTITY_RADIUS } from "./EntityNode";
+import { NODE_RADIUS } from "./Node";
 import { useViewStore } from "./viewStore";
 
 const CURVE_SEGMENTS = 32;
 const HIT_TUBE_RADIUS = 0.35;
-const TRIM_RADIUS = ENTITY_RADIUS + 0.05;
+const TRIM_RADIUS = NODE_RADIUS + 0.05;
 const MARKER_T = 0.14;
 const ARROW_LENGTH = 0.35;
 const ARROW_RADIUS = 0.15;
 
 // Exported so the InfoPanel can color a relationship's title the same as its rendered edge —
-// relationships have no fixed per-type hue like space/orbit/entity do, their "color" is scope
+// relationships have no fixed per-type hue like space/orbit/node do, their "color" is scope
 // (local/cross-orbit/cross-space), so this is the one source of truth for it.
 export const EDGE_STYLES: Record<
   RelationshipScope,
@@ -83,21 +83,21 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
   const style = EDGE_STYLES[scope];
   const [sourceCardinality, targetCardinality] = splitCardinality(relationship.cardinality);
 
-  // An entity mesh is always more specific than the edge tube passing near/through it
-  // (e.g. any same-orbit edge's endpoints sit right at its connected entities) — defer to it.
-  const hitEntity = (e: ThreeEvent<MouseEvent>) =>
-    e.intersections.some((i) => i.object.userData?.entityId);
+  // An node mesh is always more specific than the edge tube passing near/through it
+  // (e.g. any same-orbit edge's endpoints sit right at its connected nodes) — defer to it.
+  const hitNode = (e: ThreeEvent<MouseEvent>) =>
+    e.intersections.some((i) => i.object.userData?.nodeId);
 
   // Single click only moves the camera (same as a sidebar row click); the panel only opens on
   // double-click, or via the sidebar's "View notes" context menu item.
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    if (hitEntity(e)) return;
+    if (hitNode(e)) return;
     e.stopPropagation();
     focusOn(relationship.id, "relationship");
   };
 
   const handleDoubleClick = (e: ThreeEvent<MouseEvent>) => {
-    if (hitEntity(e)) return;
+    if (hitNode(e)) return;
     e.stopPropagation();
     openTab(relationship.id, "relationship");
   };

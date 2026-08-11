@@ -1,8 +1,8 @@
 import { add } from "@/lib/vector3";
 import type { ModelState } from "./store";
-import type { Entity, Orbit, Project, Relationship, Space, Tab, Tag, Vector3 } from "./types";
+import type { Node, Orbit, Project, Relationship, Space, Tab, Tag, Vector3 } from "./types";
 
-// Resolves tag ids (as stored on a space/orbit/entity/relationship) to their current display
+// Resolves tag ids (as stored on a space/orbit/node/relationship) to their current display
 // names via the shared registry — dangling ids (e.g. a mid-render deleteTag race) are dropped
 // rather than surfaced as "undefined".
 export function tagNamesForIds(state: Pick<ModelState, "tags">, tagIds: string[]): string[] {
@@ -29,33 +29,33 @@ export function orbitsInSpace(state: ModelState, spaceId: string): Orbit[] {
   return [...state.orbits.values()].filter((o) => o.spaceId === spaceId);
 }
 
-export function entitiesInSpace(state: ModelState, spaceId: string): Entity[] {
-  return [...state.entities.values()].filter((e) => e.spaceId === spaceId);
+export function nodesInSpace(state: ModelState, spaceId: string): Node[] {
+  return [...state.nodes.values()].filter((e) => e.spaceId === spaceId);
 }
 
-export function entitiesInOrbit(state: ModelState, orbitId: string): Entity[] {
-  return [...state.entities.values()].filter((e) => e.orbitId === orbitId);
+export function nodesInOrbit(state: ModelState, orbitId: string): Node[] {
+  return [...state.nodes.values()].filter((e) => e.orbitId === orbitId);
 }
 
-export function ungroupedEntitiesInSpace(state: ModelState, spaceId: string): Entity[] {
-  return entitiesInSpace(state, spaceId).filter((e) => e.orbitId === undefined);
+export function ungroupedNodesInSpace(state: ModelState, spaceId: string): Node[] {
+  return nodesInSpace(state, spaceId).filter((e) => e.orbitId === undefined);
 }
 
-export function relationshipsForEntity(state: ModelState, entityId: string): Relationship[] {
+export function relationshipsForNode(state: ModelState, nodeId: string): Relationship[] {
   return [...state.relationships.values()].filter(
-    (r) => r.sourceId === entityId || r.targetId === entityId,
+    (r) => r.sourceId === nodeId || r.targetId === nodeId,
   );
 }
 
-export function entitiesInProject(state: ModelState, projectId: string): Entity[] {
+export function nodesInProject(state: ModelState, projectId: string): Node[] {
   const spaceIds = new Set(spacesInProject(state, projectId).map((s) => s.id));
-  return [...state.entities.values()].filter((e) => spaceIds.has(e.spaceId));
+  return [...state.nodes.values()].filter((e) => spaceIds.has(e.spaceId));
 }
 
-export function projectIdForEntity(state: ModelState, entityId: string): string | undefined {
-  const entity = state.entities.get(entityId);
-  if (!entity) return undefined;
-  return state.spaces.get(entity.spaceId)?.projectId;
+export function projectIdForNode(state: ModelState, nodeId: string): string | undefined {
+  const node = state.nodes.get(nodeId);
+  if (!node) return undefined;
+  return state.spaces.get(node.spaceId)?.projectId;
 }
 
 export function projectIdForOrbit(state: ModelState, orbitId: string): string | undefined {
@@ -65,22 +65,22 @@ export function projectIdForOrbit(state: ModelState, orbitId: string): string | 
 }
 
 export function relationshipsInProject(state: ModelState, projectId: string): Relationship[] {
-  const entityIds = new Set(entitiesInProject(state, projectId).map((e) => e.id));
+  const nodeIds = new Set(nodesInProject(state, projectId).map((e) => e.id));
   return [...state.relationships.values()].filter(
-    (r) => entityIds.has(r.sourceId) && entityIds.has(r.targetId),
+    (r) => nodeIds.has(r.sourceId) && nodeIds.has(r.targetId),
   );
 }
 
 export type RelationshipScope = "local" | "cross-orbit" | "cross-space";
 
-// "local" covers both same-orbit edges and edges between two ungrouped entities in the same
+// "local" covers both same-orbit edges and edges between two ungrouped nodes in the same
 // space — neither crosses an orbit boundary, so both get the same (most contained) styling tier.
 export function relationshipScope(state: ModelState, relationshipId: string): RelationshipScope {
   const relationship = state.relationships.get(relationshipId);
   if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
 
-  const source = state.entities.get(relationship.sourceId);
-  const target = state.entities.get(relationship.targetId);
+  const source = state.nodes.get(relationship.sourceId);
+  const target = state.nodes.get(relationship.targetId);
   if (!source || !target) throw new Error(`Relationship ${relationshipId} has a dangling endpoint`);
 
   if (source.spaceId !== target.spaceId) return "cross-space";
@@ -88,17 +88,17 @@ export function relationshipScope(state: ModelState, relationshipId: string): Re
   return "local";
 }
 
-// Walks entity.position -> orbit.origin (if assigned) -> space.origin, per plan.md's position-resolution rule.
-export function getWorldPosition(state: ModelState, entityId: string): Vector3 {
-  const entity = state.entities.get(entityId);
-  if (!entity) throw new Error(`Entity not found: ${entityId}`);
+// Walks node.position -> orbit.origin (if assigned) -> space.origin, per plan.md's position-resolution rule.
+export function getWorldPosition(state: ModelState, nodeId: string): Vector3 {
+  const node = state.nodes.get(nodeId);
+  if (!node) throw new Error(`Node not found: ${nodeId}`);
 
-  const space = state.spaces.get(entity.spaceId);
-  if (!space) throw new Error(`Space not found for entity ${entityId}: ${entity.spaceId}`);
+  const space = state.spaces.get(node.spaceId);
+  if (!space) throw new Error(`Space not found for node ${nodeId}: ${node.spaceId}`);
 
-  const orbitOrigin = entity.orbitId ? state.orbits.get(entity.orbitId)?.origin : undefined;
+  const orbitOrigin = node.orbitId ? state.orbits.get(node.orbitId)?.origin : undefined;
 
-  let position = entity.position;
+  let position = node.position;
   if (orbitOrigin) position = add(position, orbitOrigin);
   return add(position, space.origin);
 }
@@ -115,38 +115,38 @@ export function getOrbitWorldOrigin(state: ModelState, orbitId: string): Vector3
 
 export interface SpaceDeleteImpact {
   orbits: number;
-  entities: number;
+  nodes: number;
   relationships: number;
 }
 
 // Used only for cascade-confirmation dialog messaging — store.ts's deleteSpace keeps its own
 // inline cascade logic, this just previews the same shape before the user commits to it.
 export function spaceDeleteImpact(state: ModelState, spaceId: string): SpaceDeleteImpact {
-  const entities = entitiesInSpace(state, spaceId);
+  const nodes = nodesInSpace(state, spaceId);
   const relationshipIds = new Set<string>();
-  for (const entity of entities) {
-    for (const rel of relationshipsForEntity(state, entity.id)) relationshipIds.add(rel.id);
+  for (const node of nodes) {
+    for (const rel of relationshipsForNode(state, node.id)) relationshipIds.add(rel.id);
   }
 
   return {
     orbits: orbitsInSpace(state, spaceId).length,
-    entities: entities.length,
+    nodes: nodes.length,
     relationships: relationshipIds.size,
   };
 }
 
-// Same preview purpose as spaceDeleteImpact, for deleteEntity's cascade (its relationships).
-export function entityDeleteImpact(state: ModelState, entityId: string): { relationships: number } {
-  return { relationships: relationshipsForEntity(state, entityId).length };
+// Same preview purpose as spaceDeleteImpact, for deleteNode's cascade (its relationships).
+export function nodeDeleteImpact(state: ModelState, nodeId: string): { relationships: number } {
+  return { relationships: relationshipsForNode(state, nodeId).length };
 }
 
 export interface SearchResult {
   id: string;
-  type: "space" | "orbit" | "entity" | "tag";
+  type: "space" | "orbit" | "node" | "tag";
   name: string;
 }
 
-type SearchableState = Pick<ModelState, "spaces" | "orbits" | "entities" | "tags">;
+type SearchableState = Pick<ModelState, "spaces" | "orbits" | "nodes" | "tags">;
 
 // Relationships have no `name` field in the data model, so they're excluded from title search.
 // Projects are excluded too — the search box lives inside one project's sidebar, and project
@@ -170,9 +170,9 @@ export function searchByTitle(state: SearchableState, query: string, projectId: 
     if (!spaceIds.has(o.spaceId)) continue;
     if (o.name.toLowerCase().includes(q)) results.push({ id: o.id, type: "orbit", name: o.name });
   }
-  for (const e of state.entities.values()) {
+  for (const e of state.nodes.values()) {
     if (!spaceIds.has(e.spaceId)) continue;
-    if (e.name.toLowerCase().includes(q)) results.push({ id: e.id, type: "entity", name: e.name });
+    if (e.name.toLowerCase().includes(q)) results.push({ id: e.id, type: "node", name: e.name });
   }
   return results;
 }
@@ -181,7 +181,7 @@ export function searchByTitle(state: SearchableState, query: string, projectId: 
 // searchByTitle — tags are now their own top-level search category (a Tags section in the search
 // dropdown) rather than resolving directly to the objects that carry them; clicking a tag result
 // drills into those objects separately (see objectsForTag below), the same way clicking a space/
-// orbit result doesn't also list its entities inline.
+// orbit result doesn't also list its nodes inline.
 export function searchTags(state: Pick<ModelState, "tags">, query: string, projectId: string): SearchResult[] {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -194,11 +194,11 @@ export function searchTags(state: Pick<ModelState, "tags">, query: string, proje
   return results;
 }
 
-// Every space/orbit/entity carrying a specific tag id, resolved to a displayable/focusable shape
+// Every space/orbit/node carrying a specific tag id, resolved to a displayable/focusable shape
 // — backs the "what does this tag apply to" dialog opened from a Tags search result. Relationships
 // aren't included — no name field to show, no sidebar row (plan.md decision #11).
 export function objectsForTag(
-  state: Pick<ModelState, "spaces" | "orbits" | "entities">,
+  state: Pick<ModelState, "spaces" | "orbits" | "nodes">,
   tagId: string,
 ): SearchResult[] {
   const results: SearchResult[] = [];
@@ -208,14 +208,14 @@ export function objectsForTag(
   for (const o of state.orbits.values()) {
     if (o.tagIds.includes(tagId)) results.push({ id: o.id, type: "orbit", name: o.name });
   }
-  for (const e of state.entities.values()) {
-    if (e.tagIds.includes(tagId)) results.push({ id: e.id, type: "entity", name: e.name });
+  for (const e of state.nodes.values()) {
+    if (e.tagIds.includes(tagId)) results.push({ id: e.id, type: "node", name: e.name });
   }
   return results;
 }
 
 // Combines tag and title matches into one result list for a single search box — tags first, so
-// the UI can group results into Tags/Spaces/Orbits/Entities sections (tags always on top) just by
+// the UI can group results into Tags/Spaces/Orbits/Nodes sections (tags always on top) just by
 // filtering on `.type`. Both scoped to the same project (see searchByTitle/searchTags above).
 export function searchAll(state: SearchableState, query: string, projectId: string): SearchResult[] {
   return [...searchTags(state, query, projectId), ...searchByTitle(state, query, projectId)];
@@ -224,7 +224,7 @@ export function searchAll(state: SearchableState, query: string, projectId: stri
 // Resolves a tab's display label from the object it points at. Relationships have no name field,
 // so they're labeled by their endpoints instead (e.g. "Node 1 -> Node 2").
 export function tabLabel(state: ModelState, tab: Tab): string {
-  if (tab.type === "entity") return state.entities.get(tab.id)?.name ?? "Unknown entity";
+  if (tab.type === "node") return state.nodes.get(tab.id)?.name ?? "Unknown node";
 
   if (tab.type === "orbit") {
     const orbit = state.orbits.get(tab.id);
@@ -238,7 +238,7 @@ export function tabLabel(state: ModelState, tab: Tab): string {
 
   const relationship = state.relationships.get(tab.id);
   if (!relationship) return "Unknown relationship";
-  const source = state.entities.get(relationship.sourceId)?.name ?? "?";
-  const target = state.entities.get(relationship.targetId)?.name ?? "?";
+  const source = state.nodes.get(relationship.sourceId)?.name ?? "?";
+  const target = state.nodes.get(relationship.targetId)?.name ?? "?";
   return `${source} → ${target}`;
 }

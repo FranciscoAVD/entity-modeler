@@ -20,24 +20,24 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import {
-  entitiesInOrbit,
-  entityDeleteImpact,
+  nodesInOrbit,
+  nodeDeleteImpact,
   orbitsInSpace,
-  relationshipsForEntity,
+  relationshipsForNode,
   spaceDeleteImpact,
   spacesInProject,
-  ungroupedEntitiesInSpace,
+  ungroupedNodesInSpace,
 } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Entity, Orbit, Space } from "@/store/types";
+import type { Node, Orbit, Space } from "@/store/types";
 import { CreateDialog } from "./CreateDialog";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import type { PendingCreate } from "./Sidebar";
-import { EntityIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { NodeIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { useViewStore } from "./viewStore";
 
 interface RenameTarget {
-  type: "space" | "orbit" | "entity";
+  type: "space" | "orbit" | "node";
   id: string;
   name: string;
 }
@@ -45,7 +45,7 @@ interface RenameTarget {
 const RENAME_TITLES: Record<RenameTarget["type"], string> = {
   space: "Rename space",
   orbit: "Rename orbit",
-  entity: "Rename node",
+  node: "Rename node",
 };
 
 type DeleteTarget = RenameTarget;
@@ -53,7 +53,7 @@ type DeleteTarget = RenameTarget;
 const DELETE_TITLES: Record<DeleteTarget["type"], string> = {
   space: "Delete space",
   orbit: "Delete orbit",
-  entity: "Delete node",
+  node: "Delete node",
 };
 
 const plural = (n: number, singular: string, pluralForm = `${singular}s`) =>
@@ -64,7 +64,7 @@ interface TreeProps {
   onRequestRename: (target: RenameTarget) => void;
   onRequestDelete: (target: DeleteTarget) => void;
   onRequestAddRelationship: (sourceId: string) => void;
-  onRequestMove: (entityId: string) => void;
+  onRequestMove: (nodeId: string) => void;
 }
 
 export function SidebarTree({
@@ -75,17 +75,17 @@ export function SidebarTree({
 }: {
   onRequestCreate: (request: PendingCreate) => void;
   onRequestAddRelationship: (sourceId: string) => void;
-  onRequestMove: (entityId: string) => void;
+  onRequestMove: (nodeId: string) => void;
 } & { projectId: string }) {
   const spaces = useModelStore(
     useShallow((state) => spacesInProject(state, projectId)),
   );
   const renameSpace = useModelStore((state) => state.renameSpace);
   const renameOrbit = useModelStore((state) => state.renameOrbit);
-  const renameEntity = useModelStore((state) => state.renameEntity);
+  const renameNode = useModelStore((state) => state.renameNode);
   const deleteSpace = useModelStore((state) => state.deleteSpace);
   const deleteOrbit = useModelStore((state) => state.deleteOrbit);
-  const deleteEntity = useModelStore((state) => state.deleteEntity);
+  const deleteNode = useModelStore((state) => state.deleteNode);
 
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
@@ -93,13 +93,13 @@ export function SidebarTree({
     if (!deleteTarget) return null;
     if (deleteTarget.type === "space") {
       const impact = spaceDeleteImpact(state, deleteTarget.id);
-      return `This will also delete ${plural(impact.orbits, "orbit")}, ${plural(impact.entities, "entity", "entities")}, and ${plural(impact.relationships, "relationship")}.`;
+      return `This will also delete ${plural(impact.orbits, "orbit")}, ${plural(impact.nodes, "node", "nodes")}, and ${plural(impact.relationships, "relationship")}.`;
     }
     if (deleteTarget.type === "orbit") {
-      const count = entitiesInOrbit(state, deleteTarget.id).length;
-      return `${plural(count, "entity", "entities")} will be ungrouped, not deleted.`;
+      const count = nodesInOrbit(state, deleteTarget.id).length;
+      return `${plural(count, "node", "nodes")} will be ungrouped, not deleted.`;
     }
-    const impact = entityDeleteImpact(state, deleteTarget.id);
+    const impact = nodeDeleteImpact(state, deleteTarget.id);
     return `This will also delete ${plural(impact.relationships, "relationship")}.`;
   });
 
@@ -107,14 +107,14 @@ export function SidebarTree({
     if (!renameTarget) return;
     if (renameTarget.type === "space") renameSpace(renameTarget.id, name);
     else if (renameTarget.type === "orbit") renameOrbit(renameTarget.id, name);
-    else renameEntity(renameTarget.id, name);
+    else renameNode(renameTarget.id, name);
   };
 
   const handleDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === "space") deleteSpace(deleteTarget.id);
     else if (deleteTarget.type === "orbit") deleteOrbit(deleteTarget.id);
-    else deleteEntity(deleteTarget.id);
+    else deleteNode(deleteTarget.id);
   };
 
   return (
@@ -165,8 +165,8 @@ export function SidebarTree({
 // item there never bubbles into the row's own onClick, unlike the old options-button dropdown
 // which sat nested inside the row's onClick div and needed an explicit stopPropagation guard.
 //
-// `visibility` is omitted for entity rows — visibility is inherited from the parent space/orbit
-// rather than toggled independently, so there's no per-entity "Visible" checkbox to show.
+// `visibility` is omitted for node rows — visibility is inherited from the parent space/orbit
+// rather than toggled independently, so there's no per-node "Visible" checkbox to show.
 function RowContextMenu({
   visibility,
   onRename,
@@ -285,7 +285,7 @@ function SpaceRow({
     useShallow((state) => orbitsInSpace(state, space.id)),
   );
   const nodes = useModelStore(
-    useShallow((state) => ungroupedEntitiesInSpace(state, space.id)),
+    useShallow((state) => ungroupedNodesInSpace(state, space.id)),
   );
   const hidden = useViewStore((state) => state.hiddenSpaceIds.has(space.id));
   const toggleSpaceVisibility = useViewStore(
@@ -324,7 +324,7 @@ function SpaceRow({
             <ContextMenuItem
               onSelect={() => onRequestCreate({ type: "node", spaceId: space.id })}
             >
-              <EntityIcon className="mr-1.5" />
+              <NodeIcon className="mr-1.5" />
               Add node
             </ContextMenuItem>
           </>
@@ -363,10 +363,10 @@ function SpaceRow({
               onRequestMove={onRequestMove}
             />
           ))}
-          {nodes.map((entity) => (
-            <EntityRow
-              key={entity.id}
-              entity={entity}
+          {nodes.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
               onRequestRename={onRequestRename}
               onRequestDelete={onRequestDelete}
               onRequestAddRelationship={onRequestAddRelationship}
@@ -388,12 +388,12 @@ function OrbitRow({
   onRequestMove,
 }: TreeProps & { orbit: Orbit }) {
   const nodes = useModelStore(
-    useShallow((state) => entitiesInOrbit(state, orbit.id)),
+    useShallow((state) => nodesInOrbit(state, orbit.id)),
   );
   // ownHidden is the orbit's own stored toggle — drives the context menu's "Visible" checkbox,
   // which should reflect what you actually set, not the cascaded result. hidden is the effective
   // (rendered/clickable) state, also accounting for the parent space — previously this only
-  // checked the orbit's own flag, missing the space, unlike EntityRow's equivalent check.
+  // checked the orbit's own flag, missing the space, unlike NodeRow's equivalent check.
   const ownHidden = useViewStore((state) => state.hiddenOrbitIds.has(orbit.id));
   const spaceHidden = useViewStore((state) => state.hiddenSpaceIds.has(orbit.spaceId));
   const hidden = ownHidden || spaceHidden;
@@ -429,7 +429,7 @@ function OrbitRow({
               })
             }
           >
-            <EntityIcon className="mr-1.5" />
+            <NodeIcon className="mr-1.5" />
             Add node
           </ContextMenuItem>
         }
@@ -454,10 +454,10 @@ function OrbitRow({
       </RowContextMenu>
       <CollapsibleContent className={CHILD_CONTENT_CLASS}>
         <ul className={CHILD_LIST_CLASS} style={DASHED_LINE_STYLE}>
-          {nodes.map((entity) => (
-            <EntityRow
-              key={entity.id}
-              entity={entity}
+          {nodes.map((node) => (
+            <NodeRow
+              key={node.id}
+              node={node}
               onRequestRename={onRequestRename}
               onRequestDelete={onRequestDelete}
               onRequestAddRelationship={onRequestAddRelationship}
@@ -470,8 +470,8 @@ function OrbitRow({
   );
 }
 
-function EntityRow({
-  entity,
+function NodeRow({
+  node,
   onRequestRename,
   onRequestDelete,
   onRequestAddRelationship,
@@ -480,7 +480,7 @@ function EntityRow({
   TreeProps,
   "onRequestRename" | "onRequestDelete" | "onRequestAddRelationship" | "onRequestMove"
 > & {
-  entity: Entity;
+  node: Node;
 }) {
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
@@ -491,26 +491,26 @@ function EntityRow({
   const activeTabId = useModelStore((state) => state.activeTabId);
   const focusTarget = useViewStore((state) => state.focusTarget);
   const isFocused =
-    activeTabId === entity.id ||
-    (focusTarget?.type === "entity" && focusTarget.id === entity.id);
+    activeTabId === node.id ||
+    (focusTarget?.type === "node" && focusTarget.id === node.id);
   const hidden =
-    hiddenSpaceIds.has(entity.spaceId) ||
-    (entity.orbitId !== undefined && hiddenOrbitIds.has(entity.orbitId));
-  // relationshipsForEntity returns the same Relationship object references the store already
+    hiddenSpaceIds.has(node.spaceId) ||
+    (node.orbitId !== undefined && hiddenOrbitIds.has(node.orbitId));
+  // relationshipsForNode returns the same Relationship object references the store already
   // holds, so useShallow's one-level comparison is comparing stable elements — unlike building
   // fresh `{id, label}` objects per call here, which would defeat useShallow and risk the
-  // getSnapshot-loops-forever bug documented in progress.md. Labels are derived from `entities`
+  // getSnapshot-loops-forever bug documented in progress.md. Labels are derived from `nodes`
   // (also a stable Map reference) at render time instead, not inside the selector.
   const relationships = useModelStore(
-    useShallow((state) => relationshipsForEntity(state, entity.id)),
+    useShallow((state) => relationshipsForNode(state, node.id)),
   );
-  const entities = useModelStore((state) => state.entities);
+  const nodes = useModelStore((state) => state.nodes);
 
   return (
     <RowContextMenu
-      onRename={() => onRequestRename({ type: "entity", id: entity.id, name: entity.name })}
-      onViewNotes={() => openTab(entity.id, "entity")}
-      onDelete={() => onRequestDelete({ type: "entity", id: entity.id, name: entity.name })}
+      onRename={() => onRequestRename({ type: "node", id: node.id, name: node.name })}
+      onViewNotes={() => openTab(node.id, "node")}
+      onDelete={() => onRequestDelete({ type: "node", id: node.id, name: node.name })}
       extraItems={
         <>
           <ContextMenuSub>
@@ -520,8 +520,8 @@ function EntityRow({
                 <ContextMenuItem disabled>No relationships yet</ContextMenuItem>
               ) : (
                 relationships.map((relationship) => {
-                  const sourceName = entities.get(relationship.sourceId)?.name ?? "?";
-                  const targetName = entities.get(relationship.targetId)?.name ?? "?";
+                  const sourceName = nodes.get(relationship.sourceId)?.name ?? "?";
+                  const targetName = nodes.get(relationship.targetId)?.name ?? "?";
                   // Same cardinality → icon mapping as the InfoPanel title: N:M is the one
                   // inherently-bidirectional cardinality, so it borrows the two-way arrow.
                   const CardinalityIcon =
@@ -539,13 +539,13 @@ function EntityRow({
                 })
               )}
               <ContextMenuSeparator />
-              <ContextMenuItem onSelect={() => onRequestAddRelationship(entity.id)}>
+              <ContextMenuItem onSelect={() => onRequestAddRelationship(node.id)}>
                 <ArrowRightLeft className="mr-1.5" />
                 Add relationship
               </ContextMenuItem>
             </ContextMenuSubContent>
           </ContextMenuSub>
-          <ContextMenuItem onSelect={() => onRequestMove(entity.id)}>
+          <ContextMenuItem onSelect={() => onRequestMove(node.id)}>
             <Move className="mr-1.5" />
             Move to...
           </ContextMenuItem>
@@ -558,10 +558,10 @@ function EntityRow({
           !hidden && "cursor-pointer hover:bg-accent/10",
           isFocused && "bg-accent/10",
         )}
-        onClick={hidden ? undefined : () => focusOn(entity.id, "entity")}
+        onClick={hidden ? undefined : () => focusOn(node.id, "node")}
       >
-        <EntityIcon className="shrink-0" />
-        <span className="min-w-0 flex-1 truncate">{entity.name}</span>
+        <NodeIcon className="shrink-0" />
+        <span className="min-w-0 flex-1 truncate">{node.name}</span>
         {hidden && (
           <EyeOff className="text-muted-foreground size-3.5 shrink-0" aria-label="Hidden" />
         )}

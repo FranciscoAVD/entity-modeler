@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 
 // Generic "name + sensible defaults" dialog, shared by project/space/orbit/node creation and
 // by space/orbit rename — relationships get their own dialog (AddRelationshipDialog) since
-// they need two entity references rather than just a name.
+// they need two node references rather than just a name.
 export function CreateDialog({
   open,
   onOpenChange,

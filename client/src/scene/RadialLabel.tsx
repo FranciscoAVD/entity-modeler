@@ -19,7 +19,7 @@ const FALLBACK_DIR = new THREE.Vector3(0, 1, 0);
 
 // Billboarded label offset toward the camera, just outside the anchor's silhouette,
 // recomputed every frame so it never rotates into overlap as the camera orbits
-// (plan.md decision #3 — applies to entity, edge, and orbit/space titles alike).
+// (plan.md decision #3 — applies to node, edge, and orbit/space titles alike).
 export function RadialLabel({
   text,
   radius,

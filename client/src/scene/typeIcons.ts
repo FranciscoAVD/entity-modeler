@@ -6,6 +6,6 @@ export const TYPE_ICONS = {
   project: Folder,
   space: Box,
   orbit: Orbit,
-  entity: Circle,
+  node: Circle,
   relationship: ArrowRightLeft,
 } as const;

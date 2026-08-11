@@ -1,20 +1,20 @@
 import type { ThreeEvent } from "@react-three/fiber";
 import { useShallow } from "zustand/react/shallow";
-import { orbitsInSpace, ungroupedEntitiesInSpace } from "@/store/selectors";
+import { orbitsInSpace, ungroupedNodesInSpace } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
 import type { Space } from "@/store/types";
 import { BoundaryLabel } from "./BoundaryLabel";
 import { BoundarySphere } from "./BoundarySphere";
 import { computeSpaceRadius, isSpaceEmpty } from "./bounds";
 import { SPACE_COLOR } from "./SidebarTypeIcons";
-import { EntityNode } from "./EntityNode";
+import { Node } from "./Node";
 import { OrbitBoundary } from "./OrbitBoundary";
 import { useViewStore } from "./viewStore";
 
 export function SpaceBoundary({ space }: { space: Space }) {
   const orbits = useModelStore(useShallow((state) => orbitsInSpace(state, space.id)));
-  const ungroupedEntities = useModelStore(
-    useShallow((state) => ungroupedEntitiesInSpace(state, space.id)),
+  const ungroupedNodes = useModelStore(
+    useShallow((state) => ungroupedNodesInSpace(state, space.id)),
   );
   const radius = useModelStore((state) => computeSpaceRadius(state, space.id));
   const empty = useModelStore((state) => isSpaceEmpty(state, space.id));
@@ -25,14 +25,14 @@ export function SpaceBoundary({ space }: { space: Space }) {
 
   if (hidden) return null;
 
-  // A click aimed at an orbit (or an entity/edge nested inside one, or an ungrouped entity
+  // A click aimed at an orbit (or a node/edge nested inside one, or an ungrouped node
   // directly in this space) also intersects this space's own hit volume first, since it's the
   // outermost sphere along the ray. Defer to whichever is more specific — same pattern
-  // OrbitBoundary uses to yield to the entities/edges nested inside it.
+  // OrbitBoundary uses to yield to the nodes/edges nested inside it.
   const hitMoreSpecific = (e: ThreeEvent<MouseEvent>) =>
     e.intersections.some(
       (i) =>
-        i.object.userData?.entityId ||
+        i.object.userData?.nodeId ||
         i.object.userData?.relationshipId ||
         i.object.userData?.orbitId,
     );
@@ -76,8 +76,8 @@ export function SpaceBoundary({ space }: { space: Space }) {
       {orbits.map((orbit) => (
         <OrbitBoundary key={orbit.id} orbit={orbit} />
       ))}
-      {ungroupedEntities.map((entity) => (
-        <EntityNode key={entity.id} entity={entity} />
+      {ungroupedNodes.map((node) => (
+        <Node key={node.id} node={node} />
       ))}
     </group>
   );

@@ -12,8 +12,8 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
-  entitiesInProject,
-  projectIdForEntity,
+  nodesInProject,
+  projectIdForNode,
   projectIdForOrbit,
   relationshipScope,
   tagNamesForIds,
@@ -125,11 +125,11 @@ export function NoteList({
   );
 }
 
-// Space, Orbit, and Entity all share the same displayable shape (name, optional label, tags,
-// metadata, notes) — Entity has no label of its own, so it just falls back to name — so all
+// Space, Orbit, and Node all share the same displayable shape (name, optional label, tags,
+// metadata, notes) — Node has no label of its own, so it just falls back to name — so all
 // three tabs render through this rather than duplicating the same JSX per type. Tag/metadata
 // edits are delegated back to the caller via onUpdateTags/onUpdateMetadata, since each type has
-// its own store action (updateEntityTags vs. updateOrbitTags, etc.) — this component stays
+// its own store action (updateNodeTags vs. updateOrbitTags, etc.) — this component stays
 // generic across all three.
 //
 // Tags/metadata editing is off by default — the pencil button next to the name toggles it,
@@ -200,31 +200,31 @@ function GroupDetails({
   );
 }
 
-function EntityDetails({ entityId }: { entityId: string }) {
-  const entity = useModelStore((state) => state.entities.get(entityId));
+function NodeDetails({ nodeId }: { nodeId: string }) {
+  const node = useModelStore((state) => state.nodes.get(nodeId));
   const tagNames = useModelStore(
-    useShallow((state) => (entity ? tagNamesForIds(state, entity.tagIds) : [])),
+    useShallow((state) => (node ? tagNamesForIds(state, node.tagIds) : [])),
   );
   const existingTags = useModelStore(
     useShallow((state) => {
-      const projectId = projectIdForEntity(state, entityId);
+      const projectId = projectIdForNode(state, nodeId);
       return projectId ? tagsInProject(state, projectId).map((t) => t.name) : [];
     }),
   );
-  const updateEntityTags = useModelStore((state) => state.updateEntityTags);
-  const updateEntityMetadata = useModelStore((state) => state.updateEntityMetadata);
-  if (!entity) return null;
+  const updateNodeTags = useModelStore((state) => state.updateNodeTags);
+  const updateNodeMetadata = useModelStore((state) => state.updateNodeMetadata);
+  if (!node) return null;
 
   return (
     <GroupDetails
-      key={entity.id}
-      {...entity}
+      key={node.id}
+      {...node}
       tags={tagNames}
       existingTags={existingTags}
-      onUpdateTags={(tags) => updateEntityTags(entity.id, tags)}
-      onUpdateMetadata={(metadata) => updateEntityMetadata(entity.id, metadata)}
-      noteTargetType="entity"
-      titleClassName="text-entity"
+      onUpdateTags={(tags) => updateNodeTags(node.id, tags)}
+      onUpdateMetadata={(metadata) => updateNodeMetadata(node.id, metadata)}
+      noteTargetType="node"
+      titleClassName="text-node"
     />
   );
 }
@@ -287,17 +287,17 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
 function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   const relationship = useModelStore((state) => state.relationships.get(relationshipId));
   const sourceName = useModelStore((state) =>
-    relationship ? state.entities.get(relationship.sourceId)?.name : undefined,
+    relationship ? state.nodes.get(relationship.sourceId)?.name : undefined,
   );
   const targetName = useModelStore((state) =>
-    relationship ? state.entities.get(relationship.targetId)?.name : undefined,
+    relationship ? state.nodes.get(relationship.targetId)?.name : undefined,
   );
   const scope = useModelStore((state) => relationshipScope(state, relationshipId));
   const projectId = useModelStore((state) =>
-    relationship ? projectIdForEntity(state, relationship.sourceId) : undefined,
+    relationship ? projectIdForNode(state, relationship.sourceId) : undefined,
   );
-  const projectEntities = useModelStore(
-    useShallow((state) => (projectId ? entitiesInProject(state, projectId) : [])),
+  const projectNodes = useModelStore(
+    useShallow((state) => (projectId ? nodesInProject(state, projectId) : [])),
   );
   const tagNames = useModelStore(
     useShallow((state) => (relationship ? tagNamesForIds(state, relationship.tagIds) : [])),
@@ -321,8 +321,8 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   // "Add relationship" action; 1:1/1:N stay a single directional arrow, source to target.
   const CardinalityIcon = relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
 
-  // Picking an entity already on the other end swaps the two rather than leaving an invalid
-  // (or silently rejected) same-entity pair — mirrors AddRelationshipDialog's source-change guard.
+  // Picking a node already on the other end swaps the two rather than leaving an invalid
+  // (or silently rejected) same-node pair — mirrors AddRelationshipDialog's source-change guard.
   const handleSourceChange = (sourceId: string) => {
     const targetId = sourceId === relationship.targetId ? relationship.sourceId : relationship.targetId;
     updateRelationshipEndpoints(relationshipId, { sourceId, targetId });
@@ -357,24 +357,24 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
           <div className="space-y-1.5">
             <Select value={relationship.sourceId} onValueChange={handleSourceChange}>
               <SelectTrigger className="h-7 w-full text-sm">
-                <SelectValue placeholder="Source entity" />
+                <SelectValue placeholder="Source node" />
               </SelectTrigger>
               <SelectContent>
-                {projectEntities.map((entity) => (
-                  <SelectItem key={entity.id} value={entity.id}>
-                    {entity.name}
+                {projectNodes.map((node) => (
+                  <SelectItem key={node.id} value={node.id}>
+                    {node.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <Select value={relationship.targetId} onValueChange={handleTargetChange}>
               <SelectTrigger className="h-7 w-full text-sm">
-                <SelectValue placeholder="Target entity" />
+                <SelectValue placeholder="Target node" />
               </SelectTrigger>
               <SelectContent>
-                {projectEntities.map((entity) => (
-                  <SelectItem key={entity.id} value={entity.id}>
-                    {entity.name}
+                {projectNodes.map((node) => (
+                  <SelectItem key={node.id} value={node.id}>
+                    {node.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -448,7 +448,7 @@ export function InfoPanel() {
 
   return (
     <div className="flex-1 overflow-y-auto py-3">
-      {activeTab.type === "entity" && <EntityDetails entityId={activeTab.id} />}
+      {activeTab.type === "node" && <NodeDetails nodeId={activeTab.id} />}
       {activeTab.type === "orbit" && <OrbitDetails orbitId={activeTab.id} />}
       {activeTab.type === "space" && <SpaceDetails spaceId={activeTab.id} />}
       {activeTab.type === "relationship" && <RelationshipDetails relationshipId={activeTab.id} />}

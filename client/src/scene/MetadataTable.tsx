@@ -1,4 +1,4 @@
-// Shared across every level (space/orbit/entity metadata, note metadata) per plan.md decision #6:
+// Shared across every level (space/orbit/node metadata, note metadata) per plan.md decision #6:
 // "Same shape, same rendering path at every level." Read-only — a note's own metadata bag
 // (e.g. the CIDR/VLAN example in plan.md) isn't editable through the UI, only via seed data.
 export function MetadataTable({ metadata }: { metadata: Record<string, string | number> }) {

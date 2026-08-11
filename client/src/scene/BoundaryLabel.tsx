@@ -11,7 +11,7 @@ const LABEL_MARGIN = 0.6;
 
 // Fixed at the top of the sphere (unlike RadialLabel's camera-tracking offset): a space/orbit
 // is large enough to view from many angles, and a label sliding around it as the camera orbits
-// reads as disorienting rather than helpful — small entity labels don't have that problem.
+// reads as disorienting rather than helpful — small node labels don't have that problem.
 export function BoundaryLabel({ text, radius, color, dimmer }: BoundaryLabelProps) {
   return (
     <Billboard position={[0, radius + LABEL_MARGIN, 0]}>

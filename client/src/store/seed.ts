@@ -6,7 +6,7 @@ export function seedDemoProject(): string {
   const existing = [...state.projects.values()].find((p) => p.name === "Demo Project");
   if (existing) return existing.id;
 
-  const { addProject, addSpace, addOrbit, addEntity, addRelationship, addNote } =
+  const { addProject, addSpace, addOrbit, addNode, addRelationship, addNote } =
     useModelStore.getState();
 
   const projectId = addProject({ name: "Demo Project" });
@@ -44,7 +44,7 @@ export function seedDemoProject(): string {
     text: "Current rotation:\n\n1. **Primary** — Jordan\n2. **Secondary** — Priya\n3. **Escalation** — Alex\n\nPage via `pagerduty:orbit-a`. For non-urgent issues, open a ticket instead — see the [on-call guide](https://example.com/runbooks/on-call).",
   });
 
-  const node1 = addEntity({
+  const node1 = addNode({
     spaceId,
     orbitId: populatedOrbit,
     name: "Node 1",
@@ -52,16 +52,16 @@ export function seedDemoProject(): string {
     tags: ["billing"],
     metadata: { version: "2.3.1" },
   });
-  addNote("entity", node1, {
+  addNote("node", node1, {
     title: "Purpose",
     text: "Handles billing invoice generation and dunning. Reads from `orders` and writes to `invoices`.\n\nDeployed as a single service, version `2.3.1`. Scales horizontally behind the internal load balancer — see the [architecture doc](https://example.com/docs/node-1-architecture) for the full request path.",
   });
-  addNote("entity", node1, {
+  addNote("node", node1, {
     title: "Known issues",
     text: "- Retry storm under `>500 req/s` on the `/invoices` endpoint — tracked, fix targeted for next release\n- Occasional clock drift causes duplicate dunning emails\n\n> Workaround: restart the service if duplicate emails are reported; root cause is still open.",
   });
 
-  const node2 = addEntity({
+  const node2 = addNode({
     spaceId,
     orbitId: populatedOrbit,
     name: "Node 2",
@@ -71,16 +71,16 @@ export function seedDemoProject(): string {
 
   addOrbit({ spaceId, name: "Empty Orbit", origin: { x: -3.5, y: 0, z: 0 } });
 
-  const ungroupedNode = addEntity({
+  const ungroupedNode = addNode({
     spaceId,
     name: "Ungrouped Node",
     position: { x: 0, y: 3, z: -1.5 },
   });
-  addNote("entity", ungroupedNode, {
+  addNote("node", ungroupedNode, {
     title: "Pending triage",
     text: "**Not yet assigned to an orbit** — pending review.\n\nCandidate homes:\n\n- Orbit A, if it turns out to be billing-adjacent\n- A new orbit, if it stays standalone\n\nSee the on-call rotation for follow-up.",
   });
-  addNote("entity", ungroupedNode, {
+  addNote("node", ungroupedNode, {
     title: "History",
     text: "Originally provisioned as a scratch service for a spike test and never decommissioned. Traffic is low but non-zero, so removal needs a deprecation notice first.\n\n```\nlast traffic check: 2026-06-02, ~40 req/day\n```",
   });
@@ -92,7 +92,7 @@ export function seedDemoProject(): string {
     tags: ["external-facing"],
     metadata: { region: "eu-west-1" },
   });
-  const remoteNode = addEntity({ spaceId: spaceBeta, name: "Remote Node", tags: ["billing"] });
+  const remoteNode = addNode({ spaceId: spaceBeta, name: "Remote Node", tags: ["billing"] });
 
   addRelationship({ sourceId: node1, targetId: node2, cardinality: "1:N" }); // local (same orbit)
   addRelationship({ sourceId: node1, targetId: ungroupedNode, cardinality: "1:1" }); // cross-orbit

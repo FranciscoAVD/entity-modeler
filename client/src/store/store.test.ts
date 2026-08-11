@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from "bun:test";
 import {
   allProjects,
-  entitiesInProject,
-  entitiesInSpace,
-  entityDeleteImpact,
+  nodesInProject,
+  nodesInSpace,
+  nodeDeleteImpact,
   getOrbitWorldOrigin,
   getWorldPosition,
   objectsForTag,
@@ -23,7 +23,7 @@ beforeEach(() => {
     projects: new Map(),
     spaces: new Map(),
     orbits: new Map(),
-    entities: new Map(),
+    nodes: new Map(),
     relationships: new Map(),
     tags: new Map(),
     openTabs: [],
@@ -38,56 +38,56 @@ function seedProjectSpace() {
   return { projectId, spaceId };
 }
 
-describe("entity creation", () => {
+describe("node creation", () => {
   it("requires an existing space", () => {
-    const { addEntity } = useModelStore.getState();
-    expect(() => addEntity({ spaceId: "missing", name: "Foo" })).toThrow();
+    const { addNode } = useModelStore.getState();
+    expect(() => addNode({ spaceId: "missing", name: "Foo" })).toThrow();
   });
 
   it("rejects an orbit that belongs to a different space", () => {
-    const { addSpace, addOrbit, addEntity, addProject } = useModelStore.getState();
+    const { addSpace, addOrbit, addNode, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
     const orbitInB = addOrbit({ spaceId: spaceB, name: "Orbit B" });
 
-    expect(() => addEntity({ spaceId: spaceA, orbitId: orbitInB, name: "Foo" })).toThrow();
+    expect(() => addNode({ spaceId: spaceA, orbitId: orbitInB, name: "Foo" })).toThrow();
   });
 });
 
 describe("relationships", () => {
   it("rejects self-relationships", () => {
-    const { addEntity, addRelationship } = useModelStore.getState();
+    const { addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Solo" });
+    const nodeId = addNode({ spaceId, name: "Solo" });
 
     expect(() =>
-      addRelationship({ sourceId: entityId, targetId: entityId, cardinality: "1:1" }),
+      addRelationship({ sourceId: nodeId, targetId: nodeId, cardinality: "1:1" }),
     ).toThrow();
   });
 
-  it("survives the entity being moved to another space", () => {
-    const { addSpace, addEntity, addRelationship, moveEntity, addProject } = useModelStore.getState();
+  it("survives the node being moved to another space", () => {
+    const { addSpace, addNode, addRelationship, moveNode, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
-    const source = addEntity({ spaceId: spaceA, name: "Source" });
-    const target = addEntity({ spaceId: spaceA, name: "Target" });
+    const source = addNode({ spaceId: spaceA, name: "Source" });
+    const target = addNode({ spaceId: spaceA, name: "Target" });
     const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:N" });
 
-    moveEntity(source, { spaceId: spaceB });
+    moveNode(source, { spaceId: spaceB });
 
     expect(useModelStore.getState().relationships.has(relId)).toBe(true);
-    expect(useModelStore.getState().entities.get(source)?.spaceId).toBe(spaceB);
+    expect(useModelStore.getState().nodes.get(source)?.spaceId).toBe(spaceB);
   });
 });
 
 describe("updateRelationshipCardinality", () => {
   it("replaces the cardinality without touching sourceId/targetId/notes", () => {
-    const { addEntity, addRelationship, updateRelationshipCardinality } = useModelStore.getState();
+    const { addNode, addRelationship, updateRelationshipCardinality } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const source = addEntity({ spaceId, name: "Source" });
-    const target = addEntity({ spaceId, name: "Target" });
+    const source = addNode({ spaceId, name: "Source" });
+    const target = addNode({ spaceId, name: "Target" });
     const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:1" });
 
     updateRelationshipCardinality(relId, "N:M");
@@ -106,11 +106,11 @@ describe("updateRelationshipCardinality", () => {
 
 describe("updateRelationshipEndpoints", () => {
   it("re-points the relationship at a new source/target pair", () => {
-    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+    const { addNode, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
-    const c = addEntity({ spaceId, name: "C" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
+    const c = addNode({ spaceId, name: "C" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     updateRelationshipEndpoints(relId, { sourceId: a, targetId: c });
@@ -120,21 +120,21 @@ describe("updateRelationshipEndpoints", () => {
     expect(relationship?.targetId).toBe(c);
   });
 
-  it("rejects making source and target the same entity", () => {
-    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+  it("rejects making source and target the same node", () => {
+    const { addNode, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(() => updateRelationshipEndpoints(relId, { sourceId: a, targetId: a })).toThrow();
   });
 
-  it("throws for a missing relationship or entity", () => {
-    const { addEntity, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
+  it("throws for a missing relationship or node", () => {
+    const { addNode, addRelationship, updateRelationshipEndpoints } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(() =>
@@ -146,20 +146,20 @@ describe("updateRelationshipEndpoints", () => {
   });
 });
 
-describe("moveEntity", () => {
+describe("moveNode", () => {
   it("preserves world position when moving into a space with a different origin", () => {
-    const { addProject, addSpace, addEntity, moveEntity } = useModelStore.getState();
+    const { addProject, addSpace, addNode, moveNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A", origin: { x: 0, y: 0, z: 0 } });
     const spaceB = addSpace({ projectId, name: "B", origin: { x: 100, y: 0, z: 0 } });
-    const entityId = addEntity({ spaceId: spaceA, name: "E", position: { x: 1, y: 2, z: 3 } });
+    const nodeId = addNode({ spaceId: spaceA, name: "E", position: { x: 1, y: 2, z: 3 } });
 
-    const before = getWorldPosition(useModelStore.getState(), entityId);
-    moveEntity(entityId, { spaceId: spaceB });
-    const after = getWorldPosition(useModelStore.getState(), entityId);
+    const before = getWorldPosition(useModelStore.getState(), nodeId);
+    moveNode(nodeId, { spaceId: spaceB });
+    const after = getWorldPosition(useModelStore.getState(), nodeId);
 
     expect(after).toEqual(before);
-    expect(useModelStore.getState().entities.get(entityId)?.position).toEqual({
+    expect(useModelStore.getState().nodes.get(nodeId)?.position).toEqual({
       x: -99,
       y: 2,
       z: 3,
@@ -167,52 +167,52 @@ describe("moveEntity", () => {
   });
 
   it("preserves world position when moving into an orbit with a different origin", () => {
-    const { addProject, addSpace, addOrbit, addEntity, moveEntity } = useModelStore.getState();
+    const { addProject, addSpace, addOrbit, addNode, moveNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
-    const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 1, z: 1 } });
+    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 1, z: 1 } });
 
-    const before = getWorldPosition(useModelStore.getState(), entityId);
-    moveEntity(entityId, { spaceId, orbitId });
-    const after = getWorldPosition(useModelStore.getState(), entityId);
+    const before = getWorldPosition(useModelStore.getState(), nodeId);
+    moveNode(nodeId, { spaceId, orbitId });
+    const after = getWorldPosition(useModelStore.getState(), nodeId);
 
     expect(after).toEqual(before);
-    expect(useModelStore.getState().entities.get(entityId)?.orbitId).toBe(orbitId);
+    expect(useModelStore.getState().nodes.get(nodeId)?.orbitId).toBe(orbitId);
   });
 });
 
-describe("updateEntityPosition", () => {
+describe("updateNodePosition", () => {
   it("updates only the position field", () => {
-    const { addEntity, updateEntityPosition } = useModelStore.getState();
+    const { addNode, updateNodePosition } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node", position: { x: 0, y: 0, z: 0 } });
+    const nodeId = addNode({ spaceId, name: "Node", position: { x: 0, y: 0, z: 0 } });
 
-    updateEntityPosition(entityId, { x: 3, y: 4, z: 5 });
+    updateNodePosition(nodeId, { x: 3, y: 4, z: 5 });
 
-    const entity = useModelStore.getState().entities.get(entityId);
-    expect(entity?.position).toEqual({ x: 3, y: 4, z: 5 });
-    expect(entity?.spaceId).toBe(spaceId);
+    const node = useModelStore.getState().nodes.get(nodeId);
+    expect(node?.position).toEqual({ x: 3, y: 4, z: 5 });
+    expect(node?.spaceId).toBe(spaceId);
   });
 
-  it("throws for an unknown entity", () => {
-    const { updateEntityPosition } = useModelStore.getState();
-    expect(() => updateEntityPosition("missing", { x: 0, y: 0, z: 0 })).toThrow();
+  it("throws for an unknown node", () => {
+    const { updateNodePosition } = useModelStore.getState();
+    expect(() => updateNodePosition("missing", { x: 0, y: 0, z: 0 })).toThrow();
   });
 });
 
 describe("tags and metadata", () => {
-  it("updateEntityTags replaces the tags array without touching other fields", () => {
-    const { addEntity, updateEntityTags } = useModelStore.getState();
+  it("updateNodeTags replaces the tags array without touching other fields", () => {
+    const { addNode, updateNodeTags } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node", tags: ["a"] });
+    const nodeId = addNode({ spaceId, name: "Node", tags: ["a"] });
 
-    updateEntityTags(entityId, ["b", "c"]);
+    updateNodeTags(nodeId, ["b", "c"]);
 
     const state = useModelStore.getState();
-    const entity = state.entities.get(entityId);
-    expect(entity?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual(["b", "c"]);
-    expect(entity?.name).toBe("Node");
+    const node = state.nodes.get(nodeId);
+    expect(node?.tagIds.map((id) => state.tags.get(id)?.name)).toEqual(["b", "c"]);
+    expect(node?.name).toBe("Node");
   });
 
   it("updateOrbitTags and updateSpaceTags update their respective records", () => {
@@ -233,26 +233,26 @@ describe("tags and metadata", () => {
   });
 
   it("reuses an existing tag (case-insensitively) instead of creating a duplicate", () => {
-    const { addEntity, updateEntityTags } = useModelStore.getState();
+    const { addNode, updateNodeTags } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A", tags: ["Billing"] });
-    const b = addEntity({ spaceId, name: "B", tags: ["billing"] });
+    const a = addNode({ spaceId, name: "A", tags: ["Billing"] });
+    const b = addNode({ spaceId, name: "B", tags: ["billing"] });
 
     const state = useModelStore.getState();
-    const aTagId = state.entities.get(a)?.tagIds[0];
-    const bTagId = state.entities.get(b)?.tagIds[0];
+    const aTagId = state.nodes.get(a)?.tagIds[0];
+    const bTagId = state.nodes.get(b)?.tagIds[0];
     expect(aTagId).toBe(bTagId);
     expect(state.tags.size).toBe(1);
 
-    updateEntityTags(a, ["Billing", "billing"]);
-    expect(useModelStore.getState().entities.get(a)?.tagIds).toHaveLength(1);
+    updateNodeTags(a, ["Billing", "billing"]);
+    expect(useModelStore.getState().nodes.get(a)?.tagIds).toHaveLength(1);
   });
 
   it("renameTag updates the shared name for every object referencing it", () => {
-    const { addEntity, addSpace, renameTag, addProject } = useModelStore.getState();
+    const { addNode, addSpace, renameTag, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Space", tags: ["core"] });
-    const entityId = addEntity({ spaceId, name: "Node", tags: ["core"] });
+    const nodeId = addNode({ spaceId, name: "Node", tags: ["core"] });
 
     const tagId = useModelStore.getState().spaces.get(spaceId)?.tagIds[0]!;
     renameTag(tagId, "critical");
@@ -260,24 +260,24 @@ describe("tags and metadata", () => {
     const state = useModelStore.getState();
     expect(state.tags.get(tagId)?.name).toBe("critical");
     expect(state.spaces.get(spaceId)?.tagIds).toContain(tagId);
-    expect(state.entities.get(entityId)?.tagIds).toContain(tagId);
+    expect(state.nodes.get(nodeId)?.tagIds).toContain(tagId);
   });
 
   it("renameTag throws for an unknown tag or an empty name", () => {
-    const { addEntity, renameTag } = useModelStore.getState();
+    const { addNode, renameTag } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node", tags: ["core"] });
-    const tagId = useModelStore.getState().entities.get(entityId)?.tagIds[0]!;
+    const nodeId = addNode({ spaceId, name: "Node", tags: ["core"] });
+    const tagId = useModelStore.getState().nodes.get(nodeId)?.tagIds[0]!;
 
     expect(() => renameTag("missing", "x")).toThrow();
     expect(() => renameTag(tagId, "  ")).toThrow();
   });
 
   it("deleteTag removes it from the registry and every object that referenced it", () => {
-    const { addEntity, addSpace, deleteTag, addProject } = useModelStore.getState();
+    const { addNode, addSpace, deleteTag, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Space", tags: ["core"] });
-    const entityId = addEntity({ spaceId, name: "Node", tags: ["core", "other"] });
+    const nodeId = addNode({ spaceId, name: "Node", tags: ["core", "other"] });
 
     const tagId = useModelStore.getState().spaces.get(spaceId)?.tagIds[0]!;
     deleteTag(tagId);
@@ -285,7 +285,7 @@ describe("tags and metadata", () => {
     const state = useModelStore.getState();
     expect(state.tags.has(tagId)).toBe(false);
     expect(state.spaces.get(spaceId)?.tagIds).toEqual([]);
-    expect(state.entities.get(entityId)?.tagIds).toHaveLength(1);
+    expect(state.nodes.get(nodeId)?.tagIds).toHaveLength(1);
   });
 
   it("deleteTag throws for an unknown tag", () => {
@@ -345,16 +345,16 @@ describe("tags and metadata", () => {
     expect(state.tags.has(tagIdB)).toBe(true);
   });
 
-  it("updateEntityMetadata sets and clears the metadata bag", () => {
-    const { addEntity, updateEntityMetadata } = useModelStore.getState();
+  it("updateNodeMetadata sets and clears the metadata bag", () => {
+    const { addNode, updateNodeMetadata } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node" });
+    const nodeId = addNode({ spaceId, name: "Node" });
 
-    updateEntityMetadata(entityId, { version: "1.0" });
-    expect(useModelStore.getState().entities.get(entityId)?.metadata).toEqual({ version: "1.0" });
+    updateNodeMetadata(nodeId, { version: "1.0" });
+    expect(useModelStore.getState().nodes.get(nodeId)?.metadata).toEqual({ version: "1.0" });
 
-    updateEntityMetadata(entityId, undefined);
-    expect(useModelStore.getState().entities.get(entityId)?.metadata).toBeUndefined();
+    updateNodeMetadata(nodeId, undefined);
+    expect(useModelStore.getState().nodes.get(nodeId)?.metadata).toBeUndefined();
   });
 
   it("updateOrbitMetadata and updateSpaceMetadata update their respective records", () => {
@@ -370,17 +370,17 @@ describe("tags and metadata", () => {
   });
 
   it("throws for an unknown target", () => {
-    const { updateEntityTags, updateOrbitMetadata } = useModelStore.getState();
-    expect(() => updateEntityTags("missing", ["x"])).toThrow();
+    const { updateNodeTags, updateOrbitMetadata } = useModelStore.getState();
+    expect(() => updateNodeTags("missing", ["x"])).toThrow();
     expect(() => updateOrbitMetadata("missing", { a: 1 })).toThrow();
   });
 
   it("addRelationship accepts tags/metadata, and updateRelationshipTags/Metadata replace them", () => {
-    const { addEntity, addRelationship, updateRelationshipTags, updateRelationshipMetadata } =
+    const { addNode, addRelationship, updateRelationshipTags, updateRelationshipMetadata } =
       useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({
       sourceId: a,
       targetId: b,
@@ -414,27 +414,27 @@ describe("tags and metadata", () => {
 });
 
 describe("notes", () => {
-  it("addNote, updateNote, and deleteNote round-trip on an entity", () => {
-    const { addEntity, addNote, updateNote, deleteNote } = useModelStore.getState();
+  it("addNote, updateNote, and deleteNote round-trip on a node", () => {
+    const { addNode, addNote, updateNote, deleteNote } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node" });
+    const nodeId = addNode({ spaceId, name: "Node" });
 
-    const noteId = addNote("entity", entityId, { title: "Original", text: "First draft" });
-    expect(useModelStore.getState().entities.get(entityId)?.notes).toHaveLength(1);
+    const noteId = addNote("node", nodeId, { title: "Original", text: "First draft" });
+    expect(useModelStore.getState().nodes.get(nodeId)?.notes).toHaveLength(1);
 
-    updateNote("entity", entityId, noteId, { title: "Updated", text: "Second draft" });
-    const updated = useModelStore.getState().entities.get(entityId)?.notes[0];
+    updateNote("node", nodeId, noteId, { title: "Updated", text: "Second draft" });
+    const updated = useModelStore.getState().nodes.get(nodeId)?.notes[0];
     expect(updated).toMatchObject({ title: "Updated", text: "Second draft" });
 
-    deleteNote("entity", entityId, noteId);
-    expect(useModelStore.getState().entities.get(entityId)?.notes).toHaveLength(0);
+    deleteNote("node", nodeId, noteId);
+    expect(useModelStore.getState().nodes.get(nodeId)?.notes).toHaveLength(0);
   });
 
   it("works on a relationship target too", () => {
-    const { addEntity, addRelationship, addNote, updateNote, deleteNote } = useModelStore.getState();
+    const { addNode, addRelationship, addNote, updateNote, deleteNote } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     const noteId = addNote("relationship", relId, { title: "Path", text: "Direct" });
@@ -447,14 +447,14 @@ describe("notes", () => {
 
   it("throws for an unknown target", () => {
     const { addNote } = useModelStore.getState();
-    expect(() => addNote("entity", "missing", { title: "T", text: "X" })).toThrow();
+    expect(() => addNote("node", "missing", { title: "T", text: "X" })).toThrow();
   });
 
   it("rejects metadata on a relationship note", () => {
-    const { addEntity, addRelationship, addNote } = useModelStore.getState();
+    const { addNode, addRelationship, addNote } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(() =>
@@ -462,30 +462,30 @@ describe("notes", () => {
     ).toThrow();
   });
 
-  it("allows metadata on a space/orbit/entity note", () => {
-    const { addEntity, addNote } = useModelStore.getState();
+  it("allows metadata on a space/orbit/node note", () => {
+    const { addNode, addNote } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Node" });
+    const nodeId = addNode({ spaceId, name: "Node" });
 
-    const noteId = addNote("entity", entityId, {
+    const noteId = addNote("node", nodeId, {
       title: "Config",
       text: "Details",
       metadata: { version: "1.0" },
     });
-    expect(useModelStore.getState().entities.get(entityId)?.notes[0]?.id).toBe(noteId);
+    expect(useModelStore.getState().nodes.get(nodeId)?.notes[0]?.id).toBe(noteId);
   });
 });
 
 describe("cascading deletes", () => {
-  it("deleting a space removes its orbits, entities, and touching relationships", () => {
-    const { addSpace, addOrbit, addEntity, addRelationship, deleteSpace, addProject } =
+  it("deleting a space removes its orbits, nodes, and touching relationships", () => {
+    const { addSpace, addOrbit, addNode, addRelationship, deleteSpace, addProject } =
       useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
     const orbitId = addOrbit({ spaceId: spaceA, name: "Orbit" });
-    const inA = addEntity({ spaceId: spaceA, orbitId, name: "InA" });
-    const inB = addEntity({ spaceId: spaceB, name: "InB" });
+    const inA = addNode({ spaceId: spaceA, orbitId, name: "InA" });
+    const inB = addNode({ spaceId: spaceB, name: "InB" });
     const relId = addRelationship({ sourceId: inA, targetId: inB, cardinality: "1:1" });
 
     deleteSpace(spaceA);
@@ -493,78 +493,78 @@ describe("cascading deletes", () => {
     const state = useModelStore.getState();
     expect(state.spaces.has(spaceA)).toBe(false);
     expect(state.orbits.has(orbitId)).toBe(false);
-    expect(state.entities.has(inA)).toBe(false);
+    expect(state.nodes.has(inA)).toBe(false);
     expect(state.relationships.has(relId)).toBe(false);
-    // Entity in the untouched space survives — only the relationship that touched a deleted entity is gone.
-    expect(state.entities.has(inB)).toBe(true);
+    // Node in the untouched space survives — only the relationship that touched a deleted node is gone.
+    expect(state.nodes.has(inB)).toBe(true);
   });
 
-  it("deleting an orbit clears orbitId on its entities instead of deleting them", () => {
-    const { addOrbit, addEntity, deleteOrbit } = useModelStore.getState();
+  it("deleting an orbit clears orbitId on its nodes instead of deleting them", () => {
+    const { addOrbit, addNode, deleteOrbit } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
     const orbitId = addOrbit({ spaceId, name: "Orbit" });
-    const entityId = addEntity({ spaceId, orbitId, name: "Node" });
+    const nodeId = addNode({ spaceId, orbitId, name: "Node" });
 
     deleteOrbit(orbitId);
 
     const state = useModelStore.getState();
     expect(state.orbits.has(orbitId)).toBe(false);
-    expect(state.entities.has(entityId)).toBe(true);
-    expect(state.entities.get(entityId)?.orbitId).toBeUndefined();
+    expect(state.nodes.has(nodeId)).toBe(true);
+    expect(state.nodes.get(nodeId)?.orbitId).toBeUndefined();
   });
 });
 
 describe("delete-impact selectors", () => {
-  it("spaceDeleteImpact counts orbits, entities, and relationships touching the space", () => {
-    const { addSpace, addOrbit, addEntity, addRelationship, addProject } = useModelStore.getState();
+  it("spaceDeleteImpact counts orbits, nodes, and relationships touching the space", () => {
+    const { addSpace, addOrbit, addNode, addRelationship, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
     const orbitId = addOrbit({ spaceId: spaceA, name: "Orbit" });
-    const inA = addEntity({ spaceId: spaceA, orbitId, name: "InA" });
-    const ungroupedInA = addEntity({ spaceId: spaceA, name: "UngroupedInA" });
-    const inB = addEntity({ spaceId: spaceB, name: "InB" });
+    const inA = addNode({ spaceId: spaceA, orbitId, name: "InA" });
+    const ungroupedInA = addNode({ spaceId: spaceA, name: "UngroupedInA" });
+    const inB = addNode({ spaceId: spaceB, name: "InB" });
     addRelationship({ sourceId: inA, targetId: ungroupedInA, cardinality: "1:1" }); // local to A
     addRelationship({ sourceId: ungroupedInA, targetId: inB, cardinality: "1:N" }); // touches A
 
     const impact = spaceDeleteImpact(useModelStore.getState(), spaceA);
 
-    expect(impact).toEqual({ orbits: 1, entities: 2, relationships: 2 });
+    expect(impact).toEqual({ orbits: 1, nodes: 2, relationships: 2 });
   });
 
-  it("entityDeleteImpact counts relationships touching the entity", () => {
-    const { addEntity, addRelationship } = useModelStore.getState();
+  it("nodeDeleteImpact counts relationships touching the node", () => {
+    const { addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
-    const c = addEntity({ spaceId, name: "C" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
+    const c = addNode({ spaceId, name: "C" });
     addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
     addRelationship({ sourceId: c, targetId: a, cardinality: "1:N" });
     addRelationship({ sourceId: b, targetId: c, cardinality: "N:M" }); // doesn't touch a
 
-    expect(entityDeleteImpact(useModelStore.getState(), a)).toEqual({ relationships: 2 });
+    expect(nodeDeleteImpact(useModelStore.getState(), a)).toEqual({ relationships: 2 });
   });
 });
 
 describe("position resolution", () => {
-  it("composes entity position with orbit and space origins", () => {
-    const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
+  it("composes node position with orbit and space origins", () => {
+    const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S", origin: { x: 100, y: 0, z: 0 } });
     const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
-    const entityId = addEntity({ spaceId, orbitId, name: "E", position: { x: 1, y: 1, z: 1 } });
+    const nodeId = addNode({ spaceId, orbitId, name: "E", position: { x: 1, y: 1, z: 1 } });
 
-    const world = getWorldPosition(useModelStore.getState(), entityId);
+    const world = getWorldPosition(useModelStore.getState(), nodeId);
     expect(world).toEqual({ x: 101, y: 11, z: 1 });
   });
 
-  it("skips the orbit offset when the entity has none", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+  it("skips the orbit offset when the node has none", () => {
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S", origin: { x: 5, y: 0, z: 0 } });
-    const entityId = addEntity({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
+    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
 
-    expect(getWorldPosition(useModelStore.getState(), entityId)).toEqual({ x: 6, y: 0, z: 0 });
+    expect(getWorldPosition(useModelStore.getState(), nodeId)).toEqual({ x: 6, y: 0, z: 0 });
   });
 
   it("resolves an orbit's world origin from its space", () => {
@@ -580,9 +580,9 @@ describe("position resolution", () => {
 describe("tabs", () => {
   it("opening a tab activates it without duplicating", () => {
     const { openTab } = useModelStore.getState();
-    openTab("a", "entity");
-    openTab("b", "entity");
-    openTab("a", "entity");
+    openTab("a", "node");
+    openTab("b", "node");
+    openTab("a", "node");
 
     const state = useModelStore.getState();
     // Re-opening "a" moves it to the most-recent position rather than leaving it in place.
@@ -592,22 +592,22 @@ describe("tabs", () => {
 
   it("keeps only the 5 most recently viewed tabs, evicting the oldest", () => {
     const { openTab } = useModelStore.getState();
-    for (const id of ["a", "b", "c", "d", "e", "f"]) openTab(id, "entity");
+    for (const id of ["a", "b", "c", "d", "e", "f"]) openTab(id, "node");
 
     const state = useModelStore.getState();
     expect(state.openTabs.map((t) => t.id)).toEqual(["b", "c", "d", "e", "f"]);
     expect(state.activeTabId).toBe("f");
   });
 
-  it("cascading deletes prune tabs for removed entities and relationships", () => {
-    const { addSpace, addEntity, addRelationship, deleteSpace, openTab, addProject } =
+  it("cascading deletes prune tabs for removed nodes and relationships", () => {
+    const { addSpace, addNode, addRelationship, deleteSpace, openTab, addProject } =
       useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
-    openTab(a, "entity");
+    openTab(a, "node");
     openTab(relId, "relationship");
 
     deleteSpace(spaceId);
@@ -619,8 +619,8 @@ describe("tabs", () => {
 
   it("clearActiveTab deactivates without touching openTabs", () => {
     const { openTab, clearActiveTab } = useModelStore.getState();
-    openTab("a", "entity");
-    openTab("b", "entity");
+    openTab("a", "node");
+    openTab("b", "node");
 
     clearActiveTab();
 
@@ -632,10 +632,10 @@ describe("tabs", () => {
 
 describe("search", () => {
   it("finds objects by substring title match", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "Network Topology" });
     const spaceId = addSpace({ projectId, name: "DMZ" });
-    addEntity({ spaceId, name: "Firewall" });
+    addNode({ spaceId, name: "Firewall" });
 
     const state = useModelStore.getState();
     expect(searchByTitle(state, "wall", projectId).map((r) => r.name)).toEqual(["Firewall"]);
@@ -664,10 +664,10 @@ describe("search", () => {
   });
 
   it("searchAll puts tag matches before title matches, as distinct results", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Prod Cluster", tags: ["prod"] });
-    addEntity({ spaceId, name: "Server" });
+    addNode({ spaceId, name: "Server" });
 
     const state = useModelStore.getState();
     const combined = searchAll(state, "prod", projectId);
@@ -713,13 +713,13 @@ describe("tag registry selectors", () => {
     expect(names).toEqual(["alpha", "zeta"]);
   });
 
-  it("objectsForTag resolves every space/orbit/entity carrying a tag", () => {
-    const { addProject, addSpace, addOrbit, addEntity } = useModelStore.getState();
+  it("objectsForTag resolves every space/orbit/node carrying a tag", () => {
+    const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "Prod", tags: ["prod"] });
     addOrbit({ spaceId, name: "Edge", tags: ["prod"] });
-    addEntity({ spaceId, name: "Server", tags: ["prod"] });
-    addEntity({ spaceId, name: "Untagged" });
+    addNode({ spaceId, name: "Server", tags: ["prod"] });
+    addNode({ spaceId, name: "Untagged" });
 
     const state = useModelStore.getState();
     const tagId = state.spaces.get(spaceId)!.tagIds[0];
@@ -729,11 +729,11 @@ describe("tag registry selectors", () => {
 });
 
 describe("tabLabel", () => {
-  it("labels an entity tab by its name", () => {
-    const { addEntity, openTab } = useModelStore.getState();
+  it("labels a node tab by its name", () => {
+    const { addNode, openTab } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const entityId = addEntity({ spaceId, name: "Server" });
-    openTab(entityId, "entity");
+    const nodeId = addNode({ spaceId, name: "Server" });
+    openTab(nodeId, "node");
 
     const state = useModelStore.getState();
     expect(tabLabel(state, state.openTabs[0])).toBe("Server");
@@ -748,11 +748,11 @@ describe("tabLabel", () => {
     expect(tabLabel(state, { id: orbitId, type: "orbit" })).toBe("DMZ");
   });
 
-  it("labels a relationship tab by its source and target entity names", () => {
-    const { addEntity, addRelationship } = useModelStore.getState();
+  it("labels a relationship tab by its source and target node names", () => {
+    const { addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
 
     const state = useModelStore.getState();
@@ -760,58 +760,58 @@ describe("tabLabel", () => {
   });
 });
 
-describe("entitiesInSpace", () => {
-  it("includes entities regardless of orbit assignment", () => {
-    const { addOrbit, addEntity } = useModelStore.getState();
+describe("nodesInSpace", () => {
+  it("includes nodes regardless of orbit assignment", () => {
+    const { addOrbit, addNode } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
     const orbitId = addOrbit({ spaceId, name: "O" });
-    addEntity({ spaceId, orbitId, name: "InOrbit" });
-    addEntity({ spaceId, name: "Ungrouped" });
+    addNode({ spaceId, orbitId, name: "InOrbit" });
+    addNode({ spaceId, name: "Ungrouped" });
 
-    expect(entitiesInSpace(useModelStore.getState(), spaceId)).toHaveLength(2);
+    expect(nodesInSpace(useModelStore.getState(), spaceId)).toHaveLength(2);
   });
 });
 
 describe("relationshipScope", () => {
-  it("is local for two entities in the same orbit", () => {
-    const { addOrbit, addEntity, addRelationship } = useModelStore.getState();
+  it("is local for two nodes in the same orbit", () => {
+    const { addOrbit, addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
     const orbitId = addOrbit({ spaceId, name: "O" });
-    const a = addEntity({ spaceId, orbitId, name: "A" });
-    const b = addEntity({ spaceId, orbitId, name: "B" });
+    const a = addNode({ spaceId, orbitId, name: "A" });
+    const b = addNode({ spaceId, orbitId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
   });
 
-  it("is local for two ungrouped entities in the same space", () => {
-    const { addEntity, addRelationship } = useModelStore.getState();
+  it("is local for two ungrouped nodes in the same space", () => {
+    const { addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
-    const a = addEntity({ spaceId, name: "A" });
-    const b = addEntity({ spaceId, name: "B" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
   });
 
-  it("is cross-orbit for entities in different orbits of the same space", () => {
-    const { addOrbit, addEntity, addRelationship } = useModelStore.getState();
+  it("is cross-orbit for nodes in different orbits of the same space", () => {
+    const { addOrbit, addNode, addRelationship } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
     const orbitA = addOrbit({ spaceId, name: "OA" });
-    const a = addEntity({ spaceId, orbitId: orbitA, name: "A" });
-    const b = addEntity({ spaceId, name: "Ungrouped" });
+    const a = addNode({ spaceId, orbitId: orbitA, name: "A" });
+    const b = addNode({ spaceId, name: "Ungrouped" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-orbit");
   });
 
-  it("is cross-space for entities in different spaces", () => {
-    const { addSpace, addEntity, addRelationship, addProject } = useModelStore.getState();
+  it("is cross-space for nodes in different spaces", () => {
+    const { addSpace, addNode, addRelationship, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
-    const a = addEntity({ spaceId: spaceA, name: "A" });
-    const b = addEntity({ spaceId: spaceB, name: "B" });
+    const a = addNode({ spaceId: spaceA, name: "A" });
+    const b = addNode({ spaceId: spaceB, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-space");
@@ -820,12 +820,12 @@ describe("relationshipScope", () => {
 
 describe("relationshipsInProject", () => {
   it("includes relationships whose endpoints span multiple spaces in the project", () => {
-    const { addSpace, addEntity, addRelationship, addProject } = useModelStore.getState();
+    const { addSpace, addNode, addRelationship, addProject } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
-    const a = addEntity({ spaceId: spaceA, name: "A" });
-    const b = addEntity({ spaceId: spaceB, name: "B" });
+    const a = addNode({ spaceId: spaceA, name: "A" });
+    const b = addNode({ spaceId: spaceB, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     const ids = relationshipsInProject(useModelStore.getState(), projectId).map((r) => r.id);
@@ -833,14 +833,14 @@ describe("relationshipsInProject", () => {
   });
 
   it("excludes relationships belonging to a different project", () => {
-    const { addProject, addSpace, addEntity, addRelationship } = useModelStore.getState();
+    const { addProject, addSpace, addNode, addRelationship } = useModelStore.getState();
     const projectA = addProject({ name: "A" });
     const projectB = addProject({ name: "B" });
     const spaceA = addSpace({ projectId: projectA, name: "SA" });
     const spaceB = addSpace({ projectId: projectB, name: "SB" });
-    const a = addEntity({ spaceId: spaceA, name: "A" });
-    const b = addEntity({ spaceId: spaceA, name: "B" });
-    addEntity({ spaceId: spaceB, name: "Other" });
+    const a = addNode({ spaceId: spaceA, name: "A" });
+    const b = addNode({ spaceId: spaceA, name: "B" });
+    addNode({ spaceId: spaceB, name: "Other" });
     addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
 
     expect(relationshipsInProject(useModelStore.getState(), projectB)).toEqual([]);
@@ -857,27 +857,27 @@ describe("allProjects", () => {
   });
 });
 
-describe("entitiesInProject", () => {
-  it("includes entities across all of the project's spaces", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+describe("nodesInProject", () => {
+  it("includes nodes across all of the project's spaces", () => {
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceA = addSpace({ projectId, name: "A" });
     const spaceB = addSpace({ projectId, name: "B" });
-    addEntity({ spaceId: spaceA, name: "A1" });
-    addEntity({ spaceId: spaceB, name: "B1" });
+    addNode({ spaceId: spaceA, name: "A1" });
+    addNode({ spaceId: spaceB, name: "B1" });
 
-    expect(entitiesInProject(useModelStore.getState(), projectId)).toHaveLength(2);
+    expect(nodesInProject(useModelStore.getState(), projectId)).toHaveLength(2);
   });
 
-  it("excludes entities from a different project", () => {
-    const { addProject, addSpace, addEntity } = useModelStore.getState();
+  it("excludes nodes from a different project", () => {
+    const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectA = addProject({ name: "A" });
     const projectB = addProject({ name: "B" });
     const spaceA = addSpace({ projectId: projectA, name: "SA" });
     const spaceB = addSpace({ projectId: projectB, name: "SB" });
-    addEntity({ spaceId: spaceA, name: "A1" });
-    addEntity({ spaceId: spaceB, name: "B1" });
+    addNode({ spaceId: spaceA, name: "A1" });
+    addNode({ spaceId: spaceB, name: "B1" });
 
-    expect(entitiesInProject(useModelStore.getState(), projectA)).toHaveLength(1);
+    expect(nodesInProject(useModelStore.getState(), projectA)).toHaveLength(1);
   });
 });

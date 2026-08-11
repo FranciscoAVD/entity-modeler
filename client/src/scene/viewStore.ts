@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { Note, NoteTargetType } from "@/store/types";
 
-export type FocusableType = "space" | "orbit" | "entity" | "relationship";
+export type FocusableType = "space" | "orbit" | "node" | "relationship";
 
 export interface FocusTarget {
   id: string;

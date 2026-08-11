@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { AddRelationshipDialog } from "./AddRelationshipDialog";
 import { CreateDialog } from "./CreateDialog";
-import { MoveEntityDialog } from "./MoveEntityDialog";
+import { MoveNodeDialog } from "./MoveNodeDialog";
 import { SidebarSearch } from "./SidebarSearch";
 import { SidebarTree } from "./SidebarTree";
 
@@ -67,17 +67,17 @@ export function Sidebar({
   const project = useModelStore((state) => state.projects.get(projectId));
   const addSpace = useModelStore((state) => state.addSpace);
   const addOrbit = useModelStore((state) => state.addOrbit);
-  const addEntity = useModelStore((state) => state.addEntity);
+  const addNode = useModelStore((state) => state.addNode);
 
   const [pending, setPending] = useState<PendingCreate | null>(null);
   const [relationshipDialogOpen, setRelationshipDialogOpen] = useState(false);
   const [relationshipSourceId, setRelationshipSourceId] = useState<string | undefined>(
     undefined,
   );
-  const [moveEntityId, setMoveEntityId] = useState<string | null>(null);
+  const [moveNodeId, setMoveNodeId] = useState<string | null>(null);
 
-  // Triggered by an entity row's context menu ("Add relationship"), pre-filling the dialog's
-  // source entity.
+  // Triggered by a node row's context menu ("Add relationship"), pre-filling the dialog's
+  // source node.
   const openRelationshipDialog = (sourceId: string) => {
     setRelationshipSourceId(sourceId);
     setRelationshipDialogOpen(true);
@@ -93,7 +93,7 @@ export function Sidebar({
         addOrbit({ spaceId: pending.spaceId, name });
         break;
       case "node":
-        addEntity({ spaceId: pending.spaceId, orbitId: pending.orbitId, name });
+        addNode({ spaceId: pending.spaceId, orbitId: pending.orbitId, name });
         break;
     }
   };
@@ -135,7 +135,7 @@ export function Sidebar({
           projectId={projectId}
           onRequestCreate={setPending}
           onRequestAddRelationship={openRelationshipDialog}
-          onRequestMove={setMoveEntityId}
+          onRequestMove={setMoveNodeId}
         />
       </div>
 
@@ -156,12 +156,12 @@ export function Sidebar({
         projectId={projectId}
         initialSourceId={relationshipSourceId}
       />
-      <MoveEntityDialog
-        open={moveEntityId !== null}
+      <MoveNodeDialog
+        open={moveNodeId !== null}
         onOpenChange={(open) => {
-          if (!open) setMoveEntityId(null);
+          if (!open) setMoveNodeId(null);
         }}
-        entityId={moveEntityId}
+        nodeId={moveNodeId}
       />
     </div>
   );
