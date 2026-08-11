@@ -58,6 +58,11 @@ export function CameraRig({ projectId }: { projectId: string }) {
     const focusRequested = focusToken !== prevFocusTokenRef.current;
     prevFocusTokenRef.current = focusToken;
 
+    // Closing the info panel (activeTabId -> null) should leave the camera exactly where it
+    // is, not snap back to the project overview — only an explicit reset/focus request, or
+    // opening/switching to a tab, should move the camera.
+    if (!resetRequested && !focusRequested && activeTabId === null) return;
+
     const { hiddenSpaceIds, hiddenOrbitIds } = useViewStore.getState();
 
     const focus = resolveCameraFocus(
