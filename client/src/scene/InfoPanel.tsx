@@ -27,6 +27,7 @@ import { MetadataEditor } from "./MetadataEditor";
 import { MetadataTable } from "./MetadataTable";
 import { EDGE_STYLES } from "./RelationshipEdge";
 import { TagEditor } from "./TagEditor";
+import { useTagRemovalPrompt } from "./useTagRemovalPrompt";
 import { useViewStore } from "./viewStore";
 
 // InfoPanel itself carries no padding — it's flush edge-to-edge so the Notes section's note rows
@@ -200,27 +201,29 @@ function NodeDetails({ nodeId }: { nodeId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (node ? tagNamesForIds(state, node.tagIds) : [])),
   );
+  const projectId = useModelStore((state) => projectIdForNode(state, nodeId));
   const existingTags = useModelStore(
-    useShallow((state) => {
-      const projectId = projectIdForNode(state, nodeId);
-      return projectId ? tagsInProject(state, projectId).map((t) => t.name) : [];
-    }),
+    useShallow((state) => (projectId ? tagsInProject(state, projectId).map((t) => t.name) : [])),
   );
   const updateNodeTags = useModelStore((state) => state.updateNodeTags);
   const updateNodeMetadata = useModelStore((state) => state.updateNodeMetadata);
+  const { withOrphanPrompt, dialog } = useTagRemovalPrompt(projectId);
   if (!node) return null;
 
   return (
-    <GroupDetails
-      key={node.id}
-      {...node}
-      tags={tagNames}
-      existingTags={existingTags}
-      onUpdateTags={(tags) => updateNodeTags(node.id, tags)}
-      onUpdateMetadata={(metadata) => updateNodeMetadata(node.id, metadata)}
-      noteTargetType="node"
-      titleClassName="text-node"
-    />
+    <>
+      <GroupDetails
+        key={node.id}
+        {...node}
+        tags={tagNames}
+        existingTags={existingTags}
+        onUpdateTags={withOrphanPrompt(node.tagIds, (tags) => updateNodeTags(node.id, tags))}
+        onUpdateMetadata={(metadata) => updateNodeMetadata(node.id, metadata)}
+        noteTargetType="node"
+        titleClassName="text-node"
+      />
+      {dialog}
+    </>
   );
 }
 
@@ -229,27 +232,29 @@ function OrbitDetails({ orbitId }: { orbitId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (orbit ? tagNamesForIds(state, orbit.tagIds) : [])),
   );
+  const projectId = useModelStore((state) => projectIdForOrbit(state, orbitId));
   const existingTags = useModelStore(
-    useShallow((state) => {
-      const projectId = projectIdForOrbit(state, orbitId);
-      return projectId ? tagsInProject(state, projectId).map((t) => t.name) : [];
-    }),
+    useShallow((state) => (projectId ? tagsInProject(state, projectId).map((t) => t.name) : [])),
   );
   const updateOrbitTags = useModelStore((state) => state.updateOrbitTags);
   const updateOrbitMetadata = useModelStore((state) => state.updateOrbitMetadata);
+  const { withOrphanPrompt, dialog } = useTagRemovalPrompt(projectId);
   if (!orbit) return null;
 
   return (
-    <GroupDetails
-      key={orbit.id}
-      {...orbit}
-      tags={tagNames}
-      existingTags={existingTags}
-      onUpdateTags={(tags) => updateOrbitTags(orbit.id, tags)}
-      onUpdateMetadata={(metadata) => updateOrbitMetadata(orbit.id, metadata)}
-      noteTargetType="orbit"
-      titleClassName="text-orbit"
-    />
+    <>
+      <GroupDetails
+        key={orbit.id}
+        {...orbit}
+        tags={tagNames}
+        existingTags={existingTags}
+        onUpdateTags={withOrphanPrompt(orbit.tagIds, (tags) => updateOrbitTags(orbit.id, tags))}
+        onUpdateMetadata={(metadata) => updateOrbitMetadata(orbit.id, metadata)}
+        noteTargetType="orbit"
+        titleClassName="text-orbit"
+      />
+      {dialog}
+    </>
   );
 }
 
@@ -258,24 +263,29 @@ function SpaceDetails({ spaceId }: { spaceId: string }) {
   const tagNames = useModelStore(
     useShallow((state) => (space ? tagNamesForIds(state, space.tagIds) : [])),
   );
+  const projectId = useModelStore((state) => state.spaces.get(spaceId)?.projectId);
   const existingTags = useModelStore(
-    useShallow((state) => (space ? tagsInProject(state, space.projectId).map((t) => t.name) : [])),
+    useShallow((state) => (projectId ? tagsInProject(state, projectId).map((t) => t.name) : [])),
   );
   const updateSpaceTags = useModelStore((state) => state.updateSpaceTags);
   const updateSpaceMetadata = useModelStore((state) => state.updateSpaceMetadata);
+  const { withOrphanPrompt, dialog } = useTagRemovalPrompt(projectId);
   if (!space) return null;
 
   return (
-    <GroupDetails
-      key={space.id}
-      {...space}
-      tags={tagNames}
-      existingTags={existingTags}
-      onUpdateTags={(tags) => updateSpaceTags(space.id, tags)}
-      onUpdateMetadata={(metadata) => updateSpaceMetadata(space.id, metadata)}
-      noteTargetType="space"
-      titleClassName="text-space"
-    />
+    <>
+      <GroupDetails
+        key={space.id}
+        {...space}
+        tags={tagNames}
+        existingTags={existingTags}
+        onUpdateTags={withOrphanPrompt(space.tagIds, (tags) => updateSpaceTags(space.id, tags))}
+        onUpdateMetadata={(metadata) => updateSpaceMetadata(space.id, metadata)}
+        noteTargetType="space"
+        titleClassName="text-space"
+      />
+      {dialog}
+    </>
   );
 }
 
@@ -307,6 +317,7 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
   const updateRelationshipEndpoints = useModelStore((state) => state.updateRelationshipEndpoints);
   const updateRelationshipTags = useModelStore((state) => state.updateRelationshipTags);
   const updateRelationshipMetadata = useModelStore((state) => state.updateRelationshipMetadata);
+  const { withOrphanPrompt, dialog: orphanDialog } = useTagRemovalPrompt(projectId);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [editing, setEditing] = useState(false);
 
@@ -389,7 +400,9 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
             <TagEditor
               tags={tagNames}
               existingTags={existingTags}
-              onUpdate={(tags) => updateRelationshipTags(relationshipId, tags)}
+              onUpdate={withOrphanPrompt(relationship.tagIds, (tags) =>
+                updateRelationshipTags(relationshipId, tags),
+              )}
             />
           </div>
         ) : (
@@ -430,6 +443,7 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
         description="This can't be undone."
         onConfirm={() => deleteRelationship(relationshipId)}
       />
+      {orphanDialog}
     </div>
   );
 }

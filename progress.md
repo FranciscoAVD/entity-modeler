@@ -1526,6 +1526,41 @@ with how this dialog isn't otherwise unit-tested). No browser verification done 
 session (per standing preference). `plan.md`'s search-architecture section updated in
 both places this behavior was documented.
 
+**Prompt to delete a tag once it's no longer attached to anything**
+(`client/src/scene/useTagRemovalPrompt.tsx` (new), `client/src/scene/InfoPanel.tsx`,
+`plan.md`)
+User request: removing a tag from an object, when that removal leaves the tag attached
+to nothing else in the project, should ask whether to delete it from the registry
+outright rather than silently leaving an orphaned-but-still-valid tag behind.
+- New shared hook, `useTagRemovalPrompt(projectId)`, used at all four `TagEditor`
+  call sites in `InfoPanel.tsx` (node/orbit/space/relationship) rather than duplicating
+  the same diff-and-check logic four times. Returns `withOrphanPrompt(currentTagIds,
+  update)`, a wrapper each call site applies to its own existing `updateXTags` action,
+  plus a `dialog` element (a standard `DeleteConfirmDialog`) each call site renders.
+- Mechanism: `TagEditor`'s `onUpdate` only ever hands back the *full new list of
+  names* (not a diff, not ids), so the wrapper first diffs the object's *pre-edit*
+  `tagIds` against the new names (case-insensitive, matching how tag resolution
+  already works elsewhere) to find which id(s) were actually removed, applies the real
+  update, then — only for ids that were actually removed — checks the existing
+  `objectsForTag` selector project-wide. If a removed tag now has zero remaining
+  objects anywhere (spaces/orbits/nodes/relationships all checked, since tags are
+  project-scoped and `objectsForTag` already covers all four), it prompts.
+- Deliberately a *prompt*, not an automatic deletion — `deleteTag` only ever runs on
+  explicit confirmation; declining leaves the orphaned tag in the registry exactly as
+  it already behaved before this existed (still valid, still autocompletes via
+  `TagEditor`'s `existingTags`).
+- If a single edit happens to orphan more than one tag at once (not how `TagEditor`
+  normally fires — one chip removed at a time — but the general diff logic doesn't
+  assume that), only one prompt shows at a time.
+- No new tests — this is presentational wiring around already-tested store actions
+  (`deleteTag`) and an already-tested selector (`objectsForTag`), consistent with how
+  `TagEditor`/`MetadataEditor`/every dialog in this codebase isn't unit-tested either.
+- Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing
+  warnings), 116 tests passing (unchanged, see above). No browser verification done
+  this session (per standing preference) — worth checking the prompt actually appears
+  after removing the last reference to a tag, and that declining it leaves the tag
+  intact and still autocompletable.
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
