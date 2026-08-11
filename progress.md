@@ -1348,6 +1348,21 @@ unrelated objects were bunching up near the origin instead of spreading out.
   "does the layout actually look right" isn't something the structural-property tests
   can fully confirm on their own.
 
+**Follow-up tuning: spaces get more room than orbits/nodes** (`client/src/scene/
+autoLayout.ts`, `autoLayout.test.ts`, `plan.md`)
+Immediate next piece of feedback: "spaces need more space between them," specifically
+— not a blanket "everything needs more room" request. `layoutGroup` gained a 4th,
+optional parameter (`separationPadding`, defaulting to the existing shared
+`SEPARATION_PADDING`) so one call site can ask for more breathing room without
+affecting the other two tiers. The spaces-within-project call now passes a new
+`SPACE_SEPARATION_PADDING` (8, vs. the shared 2.5) — both constants exported so the
+existing "spreads unrelated spaces apart" test could assert the space tier specifically
+now rests further apart than the generic padding would produce, not just loosely "not
+touching" (the previous version of that test's threshold was loose enough to pass
+either way, so it wouldn't have caught a regression here).
+Verified: `tsc -b && vite build` clean, `oxlint` clean, 113 tests passing (same count —
+one existing test's assertions tightened, no new test needed beyond that).
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see

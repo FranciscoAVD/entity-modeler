@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { length, subtract } from "@/lib/vector3";
 import type { Node, Orbit, Relationship, Space } from "@/store/types";
-import { autoLayoutProject, layoutGroup } from "./autoLayout";
+import { autoLayoutProject, layoutGroup, SEPARATION_PADDING, SPACE_SEPARATION_PADDING } from "./autoLayout";
 import { NODE_RADIUS, orbitRadiusForNodeCount, spaceRadiusForChildren } from "./bounds";
 
 const ORIGIN = { x: 0, y: 0, z: 0 };
@@ -213,7 +213,12 @@ describe("autoLayoutProject", () => {
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
         const dist = length(subtract(result.spaces.get(ids[i])!.origin, result.spaces.get(ids[j])!.origin));
-        expect(dist).toBeGreaterThan(spaceRadius * 2 + 2);
+        // Spaces use SPACE_SEPARATION_PADDING (larger than the generic SEPARATION_PADDING every
+        // other tier uses) — user-requested, since spaces are what a user pans/zooms across to
+        // get their bearings in the whole project. Both bounds asserted: comfortably clear of
+        // what the generic padding alone would give, and close to the actual resting floor.
+        expect(dist).toBeGreaterThan(spaceRadius * 2 + SEPARATION_PADDING);
+        expect(dist).toBeGreaterThan(spaceRadius * 2 + SPACE_SEPARATION_PADDING - 1);
       }
     }
   });

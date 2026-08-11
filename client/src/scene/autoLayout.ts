@@ -29,8 +29,11 @@ const EPSILON = 0.01;
 
 // Extra breathing room baked into every pair's resting distance, beyond just not overlapping —
 // without this, unlinked entities settle right at contact, which reads as "everything huddled in
-// one clump" even though nothing is technically overlapping.
-const SEPARATION_PADDING = 2.5;
+// one clump" even though nothing is technically overlapping. Spaces get more than orbits/nodes —
+// they're what a user pans/zooms across to get their bearings in the whole project, so visually
+// distinct gaps matter more there than at the tighter, already-zoomed-in inner tiers.
+export const SEPARATION_PADDING = 2.5;
+export const SPACE_SEPARATION_PADDING = 8;
 
 // Every position starts, and every force stays, in the y=0 plane — new objects land on the same
 // horizontal plane (panning/zooming across it is much easier to navigate than hunting above or
@@ -77,6 +80,7 @@ export function layoutGroup(
   entities: LayoutEntity[],
   links: LayoutLink[],
   containerRadius: number | undefined,
+  separationPadding: number = SEPARATION_PADDING,
 ): Map<string, Vector3> {
   const positions = new Map<string, Vector3>();
   if (entities.length === 0) return positions;
@@ -106,7 +110,7 @@ export function layoutGroup(
         const b = entities[j].id;
         const delta = subtract(positions.get(a)!, positions.get(b)!);
         const dist = Math.max(length(delta), EPSILON);
-        const minDist = radiusById.get(a)! + radiusById.get(b)! + SEPARATION_PADDING;
+        const minDist = radiusById.get(a)! + radiusById.get(b)! + separationPadding;
         const push = Math.max(minDist - dist, 0) + REPULSION_STRENGTH / (dist * dist);
         const dir = normalize(delta);
         forces.set(a, add(forces.get(a)!, scale(dir, push)));
@@ -222,7 +226,12 @@ export function autoLayoutProject(
     const ungroupedCount = [...nodes.values()].filter((n) => n.spaceId === s.id && n.orbitId === undefined).length;
     return { id: s.id, radius: spaceRadiusForChildren(orbitRadii, ungroupedCount) };
   });
-  const spacePositions = layoutGroup(spaceEntities, aggregateLinks(nodeToSpace, state.relationships.values()), undefined);
+  const spacePositions = layoutGroup(
+    spaceEntities,
+    aggregateLinks(nodeToSpace, state.relationships.values()),
+    undefined,
+    SPACE_SEPARATION_PADDING,
+  );
   for (const space of projectSpaces) {
     const origin = spacePositions.get(space.id);
     if (origin) spaces.set(space.id, { ...space, origin });
