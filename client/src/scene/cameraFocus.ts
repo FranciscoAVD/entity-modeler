@@ -1,5 +1,5 @@
 import { length, midpoint, subtract } from "@/lib/vector3";
-import { getOrbitWorldOrigin, getWorldPosition } from "@/store/selectors";
+import { getOrbitWorldOrigin, getWorldPosition, spacesInProject } from "@/store/selectors";
 import type { ModelState } from "@/store/store";
 import type { Vector3 } from "@/store/types";
 import { computeOrbitRadius, computeSpaceRadius } from "./bounds";
@@ -18,7 +18,20 @@ const SPACE_FOCUS_RADIUS_FACTOR = 1.6;
 const RELATIONSHIP_FOCUS_MIN_DISTANCE = 8;
 const RELATIONSHIP_FOCUS_DISTANCE_FACTOR = 1.1;
 
-const DEFAULT_DISTANCE = length(DEFAULT_CAMERA_POSITION);
+// The overview ("reset view", or the fallback when nothing else is focused) scales with how many
+// spaces the project has — more spaces means more to fit in view, so the camera needs to sit
+// further back; bounded so a huge project doesn't push it absurdly far out (OrbitControls' own
+// hard cap in CameraRig.tsx is 80) and a tiny one doesn't sit unnaturally close. MIN alone (at 0-1
+// spaces) matches the old fixed distance this replaces almost exactly, so the common case doesn't
+// visibly change.
+const OVERVIEW_DISTANCE_MIN = 20;
+const OVERVIEW_DISTANCE_MAX = 70;
+const OVERVIEW_DISTANCE_PER_SPACE = 6;
+
+export function overviewDistance(spaceCount: number): number {
+  const raw = OVERVIEW_DISTANCE_MIN + spaceCount * OVERVIEW_DISTANCE_PER_SPACE;
+  return Math.min(OVERVIEW_DISTANCE_MAX, Math.max(OVERVIEW_DISTANCE_MIN, raw));
+}
 
 export interface CameraFocus {
   key: string;
@@ -26,8 +39,17 @@ export interface CameraFocus {
   distance: number;
 }
 
-function defaultFocus(resetViewToken: number): CameraFocus {
-  return { key: `reset:${resetViewToken}`, target: DEFAULT_FOCUS_TARGET, distance: DEFAULT_DISTANCE };
+// projectId is part of the key, not just an input to the distance — switching projects doesn't
+// bump resetViewToken or touch activeTabId (tabs aren't project-scoped), so without this, two
+// projects that happen to land on the same resetViewToken/no-active-tab fallback would produce
+// identical keys and CameraRig's `focus.key === focusKeyRef.current` check would skip re-tweening
+// entirely, silently leaving the camera at the previous project's distance after a switch.
+function defaultFocus(resetViewToken: number, projectId: string, spaceCount: number): CameraFocus {
+  return {
+    key: `reset:${resetViewToken}:${projectId}`,
+    target: DEFAULT_FOCUS_TARGET,
+    distance: overviewDistance(spaceCount),
+  };
 }
 
 // Each of these is shared by the sidebar/scene-click explicit-focus branch and the matching
@@ -116,6 +138,7 @@ function resolveExplicitFocus(
 // stale/deleted one, so toggling something invisible can never leave the camera pointed at it.
 export function resolveCameraFocus(
   state: ModelState,
+  projectId: string,
   resetViewToken: number,
   resetRequested: boolean,
   focusTarget: FocusTarget | null,
@@ -123,7 +146,9 @@ export function resolveCameraFocus(
   hiddenSpaceIds: ReadonlySet<string>,
   hiddenOrbitIds: ReadonlySet<string>,
 ): CameraFocus {
-  if (resetRequested) return defaultFocus(resetViewToken);
+  const spaceCount = spacesInProject(state, projectId).length;
+
+  if (resetRequested) return defaultFocus(resetViewToken, projectId, spaceCount);
 
   if (focusRequested && focusTarget) {
     const explicit = resolveExplicitFocus(state, focusTarget, hiddenSpaceIds, hiddenOrbitIds);
@@ -131,7 +156,7 @@ export function resolveCameraFocus(
   }
 
   const tab = state.openTabs.find((t) => t.id === state.activeTabId);
-  if (!tab) return defaultFocus(resetViewToken);
+  if (!tab) return defaultFocus(resetViewToken, projectId, spaceCount);
 
   if (tab.type === "node" && isNodeVisible(state, tab.id, hiddenSpaceIds, hiddenOrbitIds)) {
     return nodeFocus(state, tab.id);
@@ -149,5 +174,5 @@ export function resolveCameraFocus(
     return relationshipFocus(state, tab.id);
   }
 
-  return defaultFocus(resetViewToken);
+  return defaultFocus(resetViewToken, projectId, spaceCount);
 }

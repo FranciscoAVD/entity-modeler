@@ -23,7 +23,7 @@ export function Scene({ projectId }: { projectId: string }) {
       <color attach="background" args={["#0b0b12"]} />
       <ambientLight intensity={0.7} />
       <pointLight position={[20, 20, 20]} intensity={0.6} />
-      <CameraRig />
+      <CameraRig projectId={projectId} />
       {spaces.map((space) => (
         <SpaceBoundary key={space.id} space={space} />
       ))}

@@ -28,7 +28,7 @@ interface Tween {
   startTime: number;
 }
 
-export function CameraRig() {
+export function CameraRig({ projectId }: { projectId: string }) {
   const { camera } = useThree();
   const controlsRef = useRef<ComponentRef<typeof OrbitControls>>(null);
   const tweenRef = useRef<Tween | null>(null);
@@ -62,6 +62,7 @@ export function CameraRig() {
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),
+      projectId,
       resetViewToken,
       resetRequested,
       focusTarget,
@@ -82,7 +83,7 @@ export function CameraRig() {
       toTarget,
       startTime: performance.now(),
     };
-  }, [activeTabId, resetViewToken, focusToken, focusTarget, camera]);
+  }, [activeTabId, resetViewToken, focusToken, focusTarget, camera, projectId]);
 
   useFrame(() => {
     const controls = controlsRef.current;

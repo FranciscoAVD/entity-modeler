@@ -2,7 +2,7 @@
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
-live — see Phase 9 below. Phase 7 (3D auto-layout) is also now done — see below. 113
+live — see Phase 9 below. Phase 7 (3D auto-layout) is also now done — see below. 116
 client tests + 6 server tests passing, build/lint clean in both packages. Full plan
 lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 →
 10 → 11`.
@@ -1362,6 +1362,40 @@ touching" (the previous version of that test's threshold was loose enough to pas
 either way, so it wouldn't have caught a regression here).
 Verified: `tsc -b && vite build` clean, `oxlint` clean, 113 tests passing (same count —
 one existing test's assertions tightened, no new test needed beyond that).
+
+**Overview camera distance now scales with a project's space count**
+(`client/src/scene/{cameraFocus,CameraRig,Scene}.tsx`, `cameraFocus.test.ts`, `plan.md`)
+User request: "reset view"/the no-active-tab overview always sat at the same fixed
+distance no matter how big the project was. New `overviewDistance(spaceCount)`
+(exported, pure) computes `clamp(20, 20 + spaceCount*6, 70)` — the floor alone matches
+the old fixed distance closely enough that a 1-2-space project (the common case, and
+the seeded demo) doesn't visibly change; the ceiling stays under `CameraRig.tsx`'s own
+hard `OrbitControls` `maxDistance={80}`.
+- `resolveCameraFocus` gained a `projectId` parameter — needed to scope
+  `spacesInProject` to the *current* project (the store can hold more than one loaded
+  project's data at once). Threaded through `CameraRig` (now takes a `projectId` prop)
+  from `Scene.tsx`, which already had it.
+- **Bug caught before it shipped, not after**: switching projects doesn't bump
+  `resetViewToken` or clear `activeTabId` (tabs aren't project-scoped in this app), so
+  two different projects both idling at the same reset token with no active tab would
+  have resolved to the *same* `CameraFocus.key` (previously just `` `reset:${token}` ``)
+  despite needing different distances. `CameraRig`'s own `focus.key ===
+  focusKeyRef.current` short-circuit exists specifically to skip redundant re-tweens —
+  it would have silently applied here too, leaving the camera at the *previous*
+  project's overview distance after a switch until something else (a tab, an explicit
+  reset) happened to change. Fixed by folding `projectId` into the default-focus key
+  itself (`` `reset:${token}:${projectId}` ``), not just feeding it into the distance
+  calculation — caught during implementation by reasoning through the key-comparison
+  logic, not by a failing test (though a new test now covers it: two projects at the
+  same token produce different keys).
+- `cameraFocus.test.ts`'s 11 existing `resolveCameraFocus` calls all updated for the
+  new parameter (two tests that previously called it with no project at all now create
+  one, since the key format needs a real `projectId`); 3 new tests added (distance
+  scales with space count, distance is clamped top and bottom, two projects don't
+  collide on the same key).
+- Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warnings),
+  116 tests passing (up from 113 — 3 new). No browser verification done this session
+  (per standing preference).
 
 ## TODO — remaining phases
 
