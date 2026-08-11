@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { ProjectDetail } from "shared";
 import { db } from "./connection";
 import {
@@ -22,29 +22,10 @@ import {
 // delete step is a no-op and this becomes a plain insert.
 export function upsertProject(id: string, data: ProjectDetail): void {
   db.transaction((tx) => {
-    // notes have no FK to their target (polymorphic target_type/target_id), so cascading a
-    // project delete won't clean them up — gather the *old* target ids first so they can be
-    // deleted explicitly, before the cascade below removes the rows those ids pointed at.
-    const oldSpaceIds = tx.select({ id: spaces.id }).from(spaces).where(eq(spaces.projectId, id)).all().map((r) => r.id);
-    const oldOrbitIds = oldSpaceIds.length
-      ? tx.select({ id: orbits.id }).from(orbits).where(inArray(orbits.spaceId, oldSpaceIds)).all().map((r) => r.id)
-      : [];
-    const oldNodeIds = oldSpaceIds.length
-      ? tx.select({ id: nodes.id }).from(nodes).where(inArray(nodes.spaceId, oldSpaceIds)).all().map((r) => r.id)
-      : [];
-    const oldRelationshipIds = oldNodeIds.length
-      ? tx
-          .select({ id: relationships.id })
-          .from(relationships)
-          .where(inArray(relationships.sourceId, oldNodeIds))
-          .all()
-          .map((r) => r.id)
-      : [];
-    const oldTargetIds = [...oldSpaceIds, ...oldOrbitIds, ...oldNodeIds, ...oldRelationshipIds];
-    if (oldTargetIds.length) tx.delete(notes).where(inArray(notes.targetId, oldTargetIds)).run();
-
-    // Cascades away spaces -> orbits/nodes -> relationships/join-tables, and tags -> join-tables,
-    // per the FK onDelete rules in schema.ts. No-op if this is a brand-new project id.
+    // Cascades away spaces -> orbits/nodes/notes -> relationships/notes/join-tables, and
+    // tags -> join-tables, per the FK onDelete rules in schema.ts — notes now have a real FK to
+    // their parent, so no manual pre-delete step is needed (unlike the old polymorphic table).
+    // No-op if this is a brand-new project id.
     tx.delete(projects).where(eq(projects.id, id)).run();
 
     tx.insert(projects).values({ id, name: data.project.name, description: data.project.description }).run();
@@ -126,26 +107,24 @@ export function upsertProject(id: string, data: ProjectDetail): void {
         .run();
     }
 
+    // Exactly one of spaceId/orbitId/nodeId/relationshipId is set per row — which one depends on
+    // which of the four flatMaps below a given note came from.
     const allNotes = [
-      ...data.spaces.flatMap((s) => s.notes.map((n) => ({ note: n, targetType: "space" as const, targetId: s.id }))),
-      ...flatOrbits.flatMap((o) => o.notes.map((n) => ({ note: n, targetType: "orbit" as const, targetId: o.id }))),
-      ...flatNodes.flatMap((n) => n.notes.map((note) => ({ note, targetType: "node" as const, targetId: n.id }))),
-      ...data.relationships.flatMap((r) =>
-        r.notes.map((n) => ({ note: n, targetType: "relationship" as const, targetId: r.id })),
-      ),
+      ...data.spaces.flatMap((s) => s.notes.map((note) => ({ note, spaceId: s.id }))),
+      ...flatOrbits.flatMap((o) => o.notes.map((note) => ({ note, orbitId: o.id }))),
+      ...flatNodes.flatMap((n) => n.notes.map((note) => ({ note, nodeId: n.id }))),
+      ...data.relationships.flatMap((r) => r.notes.map((note) => ({ note, relationshipId: r.id }))),
     ];
     if (allNotes.length) {
       tx.insert(notes)
         .values(
-          allNotes.map(({ note, targetType, targetId }) => ({
+          allNotes.map(({ note, ...parent }) => ({
             id: note.id,
-            targetType,
-            targetId,
             title: note.title,
             text: note.text,
             author: note.author,
             createdAt: note.createdAt,
-            metadata: note.metadata,
+            ...parent,
           })),
         )
         .run();

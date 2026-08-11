@@ -449,31 +449,6 @@ describe("notes", () => {
     const { addNote } = useModelStore.getState();
     expect(() => addNote("node", "missing", { title: "T", text: "X" })).toThrow();
   });
-
-  it("rejects metadata on a relationship note", () => {
-    const { addNode, addRelationship, addNote } = useModelStore.getState();
-    const { spaceId } = seedProjectSpace();
-    const a = addNode({ spaceId, name: "A" });
-    const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
-
-    expect(() =>
-      addNote("relationship", relId, { title: "Path", text: "Direct", metadata: { vlan: 12 } }),
-    ).toThrow();
-  });
-
-  it("allows metadata on a space/orbit/node note", () => {
-    const { addNode, addNote } = useModelStore.getState();
-    const { spaceId } = seedProjectSpace();
-    const nodeId = addNode({ spaceId, name: "Node" });
-
-    const noteId = addNote("node", nodeId, {
-      title: "Config",
-      text: "Details",
-      metadata: { version: "1.0" },
-    });
-    expect(useModelStore.getState().nodes.get(nodeId)?.notes[0]?.id).toBe(noteId);
-  });
 });
 
 describe("cascading deletes", () => {

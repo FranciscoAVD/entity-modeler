@@ -101,7 +101,7 @@ export interface ModelActions {
   addNote(
     targetType: NoteTargetType,
     targetId: string,
-    note: { title: string; text: string; author?: string; metadata?: Record<string, string | number> },
+    note: { title: string; text: string; author?: string },
   ): string;
   updateNote(
     targetType: NoteTargetType,
@@ -732,13 +732,6 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
   },
 
   addNote(targetType, targetId, note) {
-    // Relationship notes are prose-only — no structured metadata bag (unlike Space/Orbit/Node
-    // notes), since a relationship has no natural place for the kind of structured data
-    // (subnet CIDR/VLAN, etc.) that bag exists for.
-    if (targetType === "relationship" && note.metadata !== undefined) {
-      throw new Error("Relationship notes cannot carry metadata");
-    }
-
     const id = crypto.randomUUID();
     const fullNote: Note = {
       id,
@@ -746,7 +739,6 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
       text: note.text,
       author: note.author,
       createdAt: Date.now(),
-      metadata: note.metadata,
     };
 
     set(notesPatch(get(), targetType, targetId, (notes) => [...notes, fullNote]));

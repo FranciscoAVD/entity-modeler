@@ -11,7 +11,6 @@ export interface Note {
   text: string;
   author?: string;
   createdAt: number;
-  metadata?: Record<string, string | number>;
 }
 
 export interface Project {

@@ -6,7 +6,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { useModelStore } from "@/store/store";
 import { MarkdownContent } from "./MarkdownContent";
-import { MetadataTable } from "./MetadataTable";
 import { useViewStore } from "./viewStore";
 
 // Docked sibling of SidePanel (see Overlay.tsx), not a modal — notes run long (500-800 words) and
@@ -145,7 +144,6 @@ export function NotePanel({ className }: { className?: string }) {
                 {note.author && ` — ${note.author}`}
               </p>
               <MarkdownContent text={note.text} />
-              {note.metadata && <MetadataTable metadata={note.metadata} />}
             </>
           )
         )}

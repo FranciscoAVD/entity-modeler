@@ -104,11 +104,6 @@ export function NoteList({
             </div>
             <MarkdownContent text={note.text} className="line-clamp-6 mt-1 text-sm" />
             {note.author && <p className="text-muted-foreground mt-1 text-sm">— {note.author}</p>}
-            {note.metadata && (
-              <div className="mt-1.5">
-                <MetadataTable metadata={note.metadata} />
-              </div>
-            )}
           </div>
         </div>
       ))}

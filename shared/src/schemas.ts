@@ -20,7 +20,6 @@ export const NoteSchema = z.object({
   text: z.string(),
   author: z.string().optional(),
   createdAt: z.number(),
-  metadata: MetadataSchema.optional(),
 });
 export type Note = z.infer<typeof NoteSchema>;
 

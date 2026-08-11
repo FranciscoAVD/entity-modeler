@@ -52,10 +52,13 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
 
   const tagRows = await db.select().from(tags).where(eq(tags.projectId, projectId));
 
-  const noteTargetIds = [...spaceIds, ...orbitIds, ...nodeIds, ...relationshipIds];
-  const noteRows = noteTargetIds.length
-    ? await db.select().from(notes).where(inArray(notes.targetId, noteTargetIds))
-    : [];
+  const noteConditions = [
+    spaceIds.length ? inArray(notes.spaceId, spaceIds) : undefined,
+    orbitIds.length ? inArray(notes.orbitId, orbitIds) : undefined,
+    nodeIds.length ? inArray(notes.nodeId, nodeIds) : undefined,
+    relationshipIds.length ? inArray(notes.relationshipId, relationshipIds) : undefined,
+  ].filter((c) => c !== undefined);
+  const noteRows = noteConditions.length ? await db.select().from(notes).where(or(...noteConditions)) : [];
 
   const [spaceTagRows, orbitTagRows, nodeTagRows, relationshipTagRows] = await Promise.all([
     spaceIds.length
@@ -83,14 +86,28 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     return map;
   };
 
-  const notesByTarget = groupBy(noteRows, (n) => n.targetId);
+  const notesBySpace = groupBy(
+    noteRows.filter((n) => n.spaceId !== null),
+    (n) => n.spaceId as string,
+  );
+  const notesByOrbit = groupBy(
+    noteRows.filter((n) => n.orbitId !== null),
+    (n) => n.orbitId as string,
+  );
+  const notesByNode = groupBy(
+    noteRows.filter((n) => n.nodeId !== null),
+    (n) => n.nodeId as string,
+  );
+  const notesByRelationship = groupBy(
+    noteRows.filter((n) => n.relationshipId !== null),
+    (n) => n.relationshipId as string,
+  );
   const toNote = (row: (typeof noteRows)[number]): Note => ({
     id: row.id,
     title: row.title,
     text: row.text,
     author: row.author ?? undefined,
     createdAt: row.createdAt,
-    metadata: row.metadata ?? undefined,
   });
 
   const spaceTagsByTarget = groupBy(spaceTagRows, (r) => r.spaceId);
@@ -115,7 +132,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     name: row.name,
     tagIds: (nodeTagsByTarget.get(row.id) ?? []).map((t) => t.tagId),
     position: { x: row.positionX, y: row.positionY, z: row.positionZ },
-    notes: (notesByTarget.get(row.id) ?? []).map(toNote),
+    notes: (notesByNode.get(row.id) ?? []).map(toNote),
     metadata: row.metadata ?? undefined,
   });
 
@@ -126,7 +143,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     label: row.label ?? undefined,
     origin: { x: row.originX, y: row.originY, z: row.originZ },
     tagIds: (orbitTagsByTarget.get(row.id) ?? []).map((t) => t.tagId),
-    notes: (notesByTarget.get(row.id) ?? []).map(toNote),
+    notes: (notesByOrbit.get(row.id) ?? []).map(toNote),
     metadata: row.metadata ?? undefined,
     nodes: (nodesByOrbit.get(row.id) ?? []).map(toNodeDetail),
   });
@@ -138,7 +155,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     label: row.label ?? undefined,
     origin: { x: row.originX, y: row.originY, z: row.originZ },
     tagIds: (spaceTagsByTarget.get(row.id) ?? []).map((t) => t.tagId),
-    notes: (notesByTarget.get(row.id) ?? []).map(toNote),
+    notes: (notesBySpace.get(row.id) ?? []).map(toNote),
     metadata: row.metadata ?? undefined,
     orbits: (orbitsBySpace.get(row.id) ?? []).map(toOrbitDetail),
     ungroupedNodes: (ungroupedNodesBySpace.get(row.id) ?? []).map(toNodeDetail),
@@ -159,7 +176,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
       targetId: r.targetId,
       cardinality: r.cardinality,
       tagIds: (relationshipTagsByTarget.get(r.id) ?? []).map((t) => t.tagId),
-      notes: (notesByTarget.get(r.id) ?? []).map(toNote),
+      notes: (notesByRelationship.get(r.id) ?? []).map(toNote),
       metadata: r.metadata ?? undefined,
     })),
     tags: tagRows.map(toTag),

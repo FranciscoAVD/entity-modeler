@@ -77,19 +77,22 @@ export const tags = sqliteTable("tags", {
   name: text("name").notNull(),
 });
 
-// Polymorphic (targetType + targetId) rather than four separate tables — matches decision #6's
-// "same shape, same rendering path at every level." No FK on targetId since it can point at any
-// of four different tables; referential integrity here is enforced by always deleting a project's
-// notes alongside the rest of its data in the same upsert transaction, not by the schema.
+// One table, not four — matches decision #6's "same shape, same rendering path at every level" —
+// but with a real FK per possible parent (exactly one of the four is set per row, enforced by
+// writes.ts, not a DB CHECK) instead of a polymorphic targetType/targetId pair. This gives every
+// note proper referential integrity and cascade-on-delete without needing a separate table per
+// type. No `metadata` column — metadata is exclusively an object-level concept (decision #11),
+// never per-note.
 export const notes = sqliteTable("notes", {
   id: text("id").primaryKey(),
-  targetType: text("target_type", { enum: ["space", "orbit", "node", "relationship"] }).notNull(),
-  targetId: text("target_id").notNull(),
+  spaceId: text("space_id").references(() => spaces.id, { onDelete: "cascade" }),
+  orbitId: text("orbit_id").references(() => orbits.id, { onDelete: "cascade" }),
+  nodeId: text("node_id").references(() => nodes.id, { onDelete: "cascade" }),
+  relationshipId: text("relationship_id").references(() => relationships.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   text: text("text").notNull(),
   author: text("author"),
   createdAt: real("created_at").notNull(),
-  metadata: text("metadata", { mode: "json" }).$type<Metadata>(),
 });
 
 // Four join tables for the tagIds many-to-many (a plain array column isn't representable in SQL
