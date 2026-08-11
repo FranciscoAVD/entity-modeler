@@ -1481,6 +1481,29 @@ asked for name suggestions first, several schemes were proposed with rendered pr
   `Project.notes` notes nearby), the rendering-tiers table, Phase 4's checklist item,
   Phase 9's shared-schema writeup, and the sidebar-submenu description.
 
+**Bug fix: `--muted` was still shadcn's default light-theme value** (`client/src/index.css`)
+User report: the dialog footer's background clashed heavily with its text. Root cause:
+`--muted: oklch(0.97 0 0)` (near-white) was never customized when the rest of the
+palette was tuned for this app's single dark theme — every neighboring token
+(`--background`, `--card`, `--border`, `--muted-foreground`) got a deliberate dark
+value, `--muted` alone was still the shadcn scaffold's light-mode default. Same class of
+bug as an earlier documented fix (`--color-input`/`--color-ring` pointing at the wrong
+variables) — one stale token, multiple visible symptoms, not footer-specific: also hit
+`combobox.tsx`'s chip background and `button.tsx`'s outline-variant hover/expanded
+state, both pairing the same near-white fill with light (`--foreground`) text. Fixed at
+the token level (`--muted: #2a2f3a`, between `--card`'s `#1c2028` and `--border`'s
+`#3a4150`) rather than patching each component, since every consumer shared the same
+root cause. `--muted-foreground` (`#8a95a5`) was already a deliberate dark-theme value
+and untouched. Noted but out of scope: the shadcn scaffold's `--sidebar-*` tokens
+(`--sidebar`, `--sidebar-accent`, etc.) are also still unmodified light-theme defaults,
+but confirmed via grep to be completely unreferenced by any component (this app's
+`Sidebar.tsx` is hand-built, not shadcn's `Sidebar` primitive) — dead CSS, not a live
+bug, left alone.
+Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warnings),
+116 tests passing (a pure CSS token change — nothing in this suite covers styling). No
+browser verification done this session (per standing preference) — worth a visual
+recheck of the dialog footer, combobox chips, and outline-button hover state.
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
