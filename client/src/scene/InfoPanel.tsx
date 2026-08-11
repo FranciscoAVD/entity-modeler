@@ -20,7 +20,7 @@ import {
   tagsInProject,
 } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Cardinality, Note, NoteTargetType } from "@/store/types";
+import type { Direction, Note, NoteTargetType } from "@/store/types";
 import { DeleteConfirmDialog } from "./DeleteConfirmDialog";
 import { MarkdownContent } from "./MarkdownContent";
 import { MetadataEditor } from "./MetadataEditor";
@@ -301,8 +301,8 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
     useShallow((state) => (projectId ? tagsInProject(state, projectId).map((t) => t.name) : [])),
   );
   const deleteRelationship = useModelStore((state) => state.deleteRelationship);
-  const updateRelationshipCardinality = useModelStore(
-    (state) => state.updateRelationshipCardinality,
+  const updateRelationshipDirection = useModelStore(
+    (state) => state.updateRelationshipDirection,
   );
   const updateRelationshipEndpoints = useModelStore((state) => state.updateRelationshipEndpoints);
   const updateRelationshipTags = useModelStore((state) => state.updateRelationshipTags);
@@ -312,9 +312,9 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
 
   if (!relationship) return null;
 
-  // N:M is many-to-many both ways, so it borrows the same bidirectional icon as the sidebar's
-  // "Add relationship" action; 1:1/1:N stay a single directional arrow, source to target.
-  const CardinalityIcon = relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
+  // Two-way borrows the same bidirectional icon as the sidebar's "Add relationship" action;
+  // one-way stays a single directional arrow, source to target.
+  const DirectionIcon = relationship.direction === "two-way" ? ArrowRightLeft : ArrowRight;
 
   // Picking a node already on the other end swaps the two rather than leaving an invalid
   // (or silently rejected) same-node pair — mirrors AddRelationshipDialog's source-change guard.
@@ -336,7 +336,7 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
             style={{ color: EDGE_STYLES[scope].color }}
           >
             <span className="min-w-0 truncate">{sourceName ?? "?"}</span>
-            <CardinalityIcon className="size-5 shrink-0" />
+            <DirectionIcon className="size-5 shrink-0" />
             <span className="min-w-0 truncate">{targetName ?? "?"}</span>
           </h3>
           <Button
@@ -375,18 +375,15 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
               </SelectContent>
             </Select>
             <Select
-              value={relationship.cardinality}
-              onValueChange={(value) =>
-                updateRelationshipCardinality(relationshipId, value as Cardinality)
-              }
+              value={relationship.direction}
+              onValueChange={(value) => updateRelationshipDirection(relationshipId, value as Direction)}
             >
-              <SelectTrigger className="h-7 w-24 text-sm">
+              <SelectTrigger className="h-7 w-28 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1:1">1:1</SelectItem>
-                <SelectItem value="1:N">1:N</SelectItem>
-                <SelectItem value="N:M">N:M</SelectItem>
+                <SelectItem value="one-way">One-way</SelectItem>
+                <SelectItem value="two-way">Two-way</SelectItem>
               </SelectContent>
             </Select>
             <TagEditor
@@ -397,7 +394,9 @@ function RelationshipDetails({ relationshipId }: { relationshipId: string }) {
           </div>
         ) : (
           <>
-            <p className="text-muted-foreground text-sm">Cardinality: {relationship.cardinality}</p>
+            <p className="text-muted-foreground text-sm">
+              Direction: {relationship.direction === "two-way" ? "Two-way" : "One-way"}
+            </p>
             {tagNames.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {tagNames.map((tag) => (

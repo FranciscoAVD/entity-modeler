@@ -85,7 +85,7 @@ Node {
 
 Relationship {
   id, sourceId, targetId,     // must differ — no self-relationships; may span different orbits/spaces
-  cardinality: "1:1" | "1:N" | "N:M",
+  direction: "one-way" | "two-way",   // replaces the earlier "1:1" | "1:N" | "N:M" cardinality — see below
   tagIds: string[],
   notes: Note[],
   metadata?: Record<string, string | number>
@@ -103,6 +103,8 @@ Tag {
 Node originally had a fields: Field[] property (Field being { id, name, type, isPK?, isFK? }) modeling database-table columns. That's been removed: a field with no value is a schema declaration, not an attribute of a specific node instance, which is a narrower assumption (this tool models general nodes/relationships, not specifically database schemas — see plan.md's own network-topology example schema under Phase 11) than this tool intends. Node now carries tags/metadata directly instead, same shape as Space/Orbit.
 
 Project originally had a notes: Note[] property too. That's been removed — notes, tags, and metadata are exclusively a Space/Orbit/Node/Relationship concept; Project never gets an editing surface for any of them.
+
+Relationship originally had a cardinality: "1:1" | "1:N" | "N:M" field, ER-diagram terminology alluding to database schema multiplicity — a narrower assumption (this tool models general nodes/relationships, not specifically database schemas, same reasoning as the Field removal above) than this tool intends, and confusing on top of that (only "N:M" was ever treated as bidirectional in the UI; "1:1"/"1:N" were arbitrarily equivalent). Replaced with direction: "one-way" | "two-way". sourceId/targetId already encode direction structurally, so the only genuinely independent piece of information worth storing is whether that direction is meaningful at all — a relationship doesn't need three stored states, just two. The three-type framing a user actually sees ("Outgoing"/"Incoming"/"Bidirectional") is derived per-node from this plus whichever endpoint they're looking from, not separately stored: a two-way relationship always reads as "Bidirectional" regardless of which endpoint you view it from, while a one-way relationship reads as "Outgoing" from its source and "Incoming" from its target. Rendering follows the same simplification — RelationshipEdge.tsx's old "1"/"N" billboarded text markers at each endpoint had no meaning left to show, so they're gone; direction is now conveyed purely by arrowheads (one at the target end for one-way, one at each end for two-way, unchanged from the old N:M treatment).
 
 tags: string[] was originally stored inline on Space/Orbit/Node(/Relationship) as free-typed strings, duplicated per object with no shared identity — renaming a tag meant editing it independently everywhere it appeared, and two objects tagging the same concept ("Billing" vs "billing") had no way to be recognized as the same tag. Normalized per decision #11: each of those types now carries tagIds: string[] instead, referencing the flat Tag registry below.
 
@@ -139,7 +141,7 @@ Object	Always visible	Revealed on click	Empty-state treatment
 Space	name/label, tint boundary	notes, metadata, tags	dashed/low-opacity boundary, min size floor
 Orbit	name/label (dimmer), tint boundary	notes, metadata, tags	same as space, nested inside it
 Node	title only, offset-billboarded sphere	notes, metadata, tags	n/a (nodes aren't containers)
-Relationship	title only (if present)	cardinality, notes, tags, metadata	n/a
+Relationship	title only (if present)	direction, notes, tags, metadata	n/a
 Click-to-reveal / tab architecture
 
 Hit detection (raycasting)
@@ -152,7 +154,7 @@ Spaces: raycast against the same kind of light bounding volume as orbits — spa
 Flow
 
 Click → raycast → resolve { id, type } → focus camera only (single click) or open/focus tab (double-click) → look up record → emit select event
-DOM tab bar + panel: the recently-viewed history (title + type icon per entry) no longer has its own dedicated tab bar — it surfaces as a "Recently viewed" section in the sidebar search box when the input is focused with an empty query, rather than a standalone Header dropdown or a row of open-selection chips; panel below shows the active tab's full info (title, tags/metadata for spaces/orbits/nodes, cardinality for relationships, notes as prose, metadata as key-value table)
+DOM tab bar + panel: the recently-viewed history (title + type icon per entry) no longer has its own dedicated tab bar — it surfaces as a "Recently viewed" section in the sidebar search box when the input is focused with an empty query, rather than a standalone Header dropdown or a row of open-selection chips; panel below shows the active tab's full info (title, tags/metadata for spaces/orbits/nodes, direction for relationships, notes as prose, metadata as key-value table)
 In-scene highlight on whichever object the active tab represents — currently a static emissive/opacity bump (node emissive color, edge width/opacity, space/orbit boundary opacity via an `active` prop), not yet an outline shader or an animated pulse
 Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position — not implemented yet
 
@@ -196,7 +198,7 @@ Phase 4 — Edge rendering + hit tubes (done)
 Visible curved (Bezier) line + paired invisible hit-tube mesh per relationship
 Billboarded title at curve midpoint, offset perpendicular to the curve
 Distinct styling for same-orbit / cross-orbit / cross-space edges
-Cardinality markers (billboarded) at endpoints
+Direction markers (billboarded arrowheads) at endpoints — later simplified further, see decision-area note on Relationship's direction field
 
 Phase 5 — Camera & interaction (done — drag-to-reposition was tried, reverted per user feedback, and later ruled out permanently by Phase 7's design: positions are exclusively auto-layout's responsibility, dragging was never rebuilt)
 
@@ -245,7 +247,7 @@ Phase 9 — Persistence & export (persistence done — read/write, seeding, migr
 
 Persistence is server-backed: SQLite via Bun's native driver (bun:sqlite), accessed through drizzle-orm, living in the `server` package — resolves the "local-only vs. server-backed" open question in progress.md in favor of server-backed. Built in six layers (shared schemas → server DB layer → server reads → server writes → client reads → client autosave), each verified independently before the next started — see progress.md for the session write-up.
 
-New `shared` workspace package (sibling to `client`/`server`, added to root package.json's workspaces) holds the wire contract: hand-written Zod schemas plus their inferred TS types, zero Drizzle dependency (only `zod`) so it can never accidentally pull a DB driver into the client bundle. Per-record schemas (Vector3Schema, NoteSchema, TagSchema, ProjectSummarySchema, SpaceSchema, OrbitSchema, NodeSchema, RelationshipSchema) mirror the domain shapes in client/src/store/types.ts exactly (Vector3 as {x,y,z}, tagIds: string[], cardinality as a literal union) rather than raw DB rows, plus a composed ProjectDetailSchema (five flat sibling arrays — see response shape below) used for both the GET response and the PUT request body, one schema authored once for both directions. ProjectDetailSchema was originally a nested tree (spaces containing their orbits containing their nodes) mirroring a natural REST resource shape — changed since neither side actually stores data that way: the client's store and the server's SQL schema are both already flat/normalized (decision #15), so the nested wire shape was pure overhead, built on every save and undone again on every load, for data that was normalized on both ends the whole time.
+New `shared` workspace package (sibling to `client`/`server`, added to root package.json's workspaces) holds the wire contract: hand-written Zod schemas plus their inferred TS types, zero Drizzle dependency (only `zod`) so it can never accidentally pull a DB driver into the client bundle. Per-record schemas (Vector3Schema, NoteSchema, TagSchema, ProjectSummarySchema, SpaceSchema, OrbitSchema, NodeSchema, RelationshipSchema) mirror the domain shapes in client/src/store/types.ts exactly (Vector3 as {x,y,z}, tagIds: string[], direction as a literal union) rather than raw DB rows, plus a composed ProjectDetailSchema (five flat sibling arrays — see response shape below) used for both the GET response and the PUT request body, one schema authored once for both directions. ProjectDetailSchema was originally a nested tree (spaces containing their orbits containing their nodes) mirroring a natural REST resource shape — changed since neither side actually stores data that way: the client's store and the server's SQL schema are both already flat/normalized (decision #15), so the nested wire shape was pure overhead, built on every save and undone again on every load, for data that was normalized on both ends the whole time.
 
 `server` owns Drizzle entirely — `shared` has no idea it exists. `db/schema.ts` defines one table per type (projects, spaces, orbits, nodes, relationships, notes, tags) plus four join tables for the tagIds relations (space_tags, orbit_tags, node_tags, relationship_tags), since a many-to-many can't be a plain array column in SQL the way it is in the client's normalized store; notes are one table (not four), matching decision #6's "same shape, same rendering path at every level", with a real nullable FK per possible parent (spaceId/orbitId/nodeId/relationshipId, each `onDelete: cascade`) rather than a polymorphic targetType/targetId pair — exactly one is set per row, so a note's parent is a real foreign key (queryable, cascade-deletable by the DB itself) instead of an unenforced string pair. No `metadata` column on notes — metadata is exclusively an object-level concept (decision #11), never per-note. Vector3 fields flatten to _x/_y/_z columns; object-level metadata stays a JSON column since it's explicitly freeform. Every other FK uses `onDelete: cascade` (or `set null` for a node's optional orbitId, mirroring deleteOrbit's reassign-not-delete behavior) as a referential-integrity safety net only — cascade *business logic* stays entirely in the client's store.ts, already tested; the server never re-implements it. `db/connection.ts` does the bun:sqlite + drizzle() wiring and runs migrations (drizzle-kit-generated, checked into `server/drizzle/`) on every boot, so `bun run dev`/`start` stays a single command. `db/seed.ts` seeds the same demo project client/src/store/seed.ts used to fabricate in-memory, once, if the `projects` table is empty on boot — the client no longer fabricates any data itself; `client/src/store/seed.ts` is deleted.
 
@@ -273,7 +275,7 @@ Single-user assumption documented as a current constraint (not designed for conc
 
 Build order: 0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11 — spaces/orbits come right after the data model since nodes are meaningless without a parent coordinate frame; camera/interaction comes before edges to get things visible and clickable early; everything else follows dependency order.
 
-Not on this list but built along the way: a right-click context menu on sidebar space/orbit/node rows (rename, view notes, visibility toggle, "Add orbit"/"Add node" as applicable, a "Relationships" submenu on node rows listing that node's relationships (cardinality-dependent icon per row) with "Add relationship" at the end), plus the sidebar tree itself (collapsible space → orbit → node list, click-to-focus, search). It's a Phase 8-ish "add/rename" UI and a Phase 6-ish "notes" affordance built ad hoc alongside the Phase 2/3 rendering work, rather than in the build-order sequence above.
+Not on this list but built along the way: a right-click context menu on sidebar space/orbit/node rows (rename, view notes, visibility toggle, "Add orbit"/"Add node" as applicable, a "Relationships" submenu on node rows listing that node's relationships (direction-dependent icon per row) with "Add relationship" at the end), plus the sidebar tree itself (collapsible space → orbit → node list, click-to-focus, search). It's a Phase 8-ish "add/rename" UI and a Phase 6-ish "notes" affordance built ad hoc alongside the Phase 2/3 rendering work, rather than in the build-order sequence above.
 
 Open questions / things to revisit later
 Multi-select bulk operations (bulk-move, bulk-delete, bulk-tag) beyond the tab pattern

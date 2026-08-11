@@ -1,11 +1,11 @@
-import { Billboard, Line, Text } from "@react-three/drei";
+import { Line } from "@react-three/drei";
 import type { ThreeEvent } from "@react-three/fiber";
 import { useMemo } from "react";
 import * as THREE from "three";
 import { useShallow } from "zustand/react/shallow";
 import { getWorldPosition, relationshipScope, type RelationshipScope } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Cardinality, Relationship } from "@/store/types";
+import type { Relationship } from "@/store/types";
 import { computeEdgeControlPoint, trimEdgeEndpoints } from "./edgeGeometry";
 import { isRelationshipVisible } from "./edgeVisibility";
 import { NODE_RADIUS } from "./Node";
@@ -14,7 +14,6 @@ import { useViewStore } from "./viewStore";
 const CURVE_SEGMENTS = 32;
 const HIT_TUBE_RADIUS = 0.35;
 const TRIM_RADIUS = NODE_RADIUS + 0.05;
-const MARKER_T = 0.14;
 const ARROW_LENGTH = 0.35;
 const ARROW_RADIUS = 0.15;
 
@@ -29,11 +28,6 @@ export const EDGE_STYLES: Record<
   "cross-orbit": { color: "#f59e0b", lineWidth: 2, dashed: false },
   "cross-space": { color: "#ec4899", lineWidth: 2, dashed: true },
 };
-
-function splitCardinality(cardinality: Cardinality): [string, string] {
-  const [source, target] = cardinality.split(":");
-  return [source, target];
-}
 
 function toVector3(v: { x: number; y: number; z: number }): THREE.Vector3 {
   return new THREE.Vector3(v.x, v.y, v.z);
@@ -52,36 +46,32 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
     isRelationshipVisible(state, relationship.id, hiddenSpaceIds, hiddenOrbitIds),
   );
 
-  const { points, hitGeometry, sourceMarkerPos, targetMarkerPos, sourceArrow, targetArrow } =
-    useMemo(() => {
-      const control = computeEdgeControlPoint(sourcePos, targetPos);
-      const trimmed = trimEdgeEndpoints(sourcePos, control, targetPos, TRIM_RADIUS);
+  const { points, hitGeometry, sourceArrow, targetArrow } = useMemo(() => {
+    const control = computeEdgeControlPoint(sourcePos, targetPos);
+    const trimmed = trimEdgeEndpoints(sourcePos, control, targetPos, TRIM_RADIUS);
 
-      const curve = new THREE.QuadraticBezierCurve3(
-        toVector3(trimmed.start),
-        toVector3(control),
-        toVector3(trimmed.end),
-      );
+    const curve = new THREE.QuadraticBezierCurve3(
+      toVector3(trimmed.start),
+      toVector3(control),
+      toVector3(trimmed.end),
+    );
 
-      // Tangent at t=0 points from source toward target (forward); the arrow touching the
-      // source node faces the opposite way (backward, out of the curve and into the node).
-      const forwardAtSource = curve.getTangentAt(0);
-      const forwardAtTarget = curve.getTangentAt(1);
+    // Tangent at t=0 points from source toward target (forward); the arrow touching the
+    // source node faces the opposite way (backward, out of the curve and into the node).
+    const forwardAtSource = curve.getTangentAt(0);
+    const forwardAtTarget = curve.getTangentAt(1);
 
-      return {
-        points: curve.getPoints(CURVE_SEGMENTS),
-        hitGeometry: new THREE.TubeGeometry(curve, CURVE_SEGMENTS, HIT_TUBE_RADIUS, 6, false),
-        sourceMarkerPos: curve.getPointAt(MARKER_T),
-        targetMarkerPos: curve.getPointAt(1 - MARKER_T),
-        sourceArrow: { tip: curve.getPointAt(0), direction: forwardAtSource.clone().negate() },
-        targetArrow: { tip: curve.getPointAt(1), direction: forwardAtTarget },
-      };
-    }, [sourcePos, targetPos]);
+    return {
+      points: curve.getPoints(CURVE_SEGMENTS),
+      hitGeometry: new THREE.TubeGeometry(curve, CURVE_SEGMENTS, HIT_TUBE_RADIUS, 6, false),
+      sourceArrow: { tip: curve.getPointAt(0), direction: forwardAtSource.clone().negate() },
+      targetArrow: { tip: curve.getPointAt(1), direction: forwardAtTarget },
+    };
+  }, [sourcePos, targetPos]);
 
   if (!isVisible) return null;
 
   const style = EDGE_STYLES[scope];
-  const [sourceCardinality, targetCardinality] = splitCardinality(relationship.cardinality);
 
   // An node mesh is always more specific than the edge tube passing near/through it
   // (e.g. any same-orbit edge's endpoints sit right at its connected nodes) — defer to it.
@@ -133,20 +123,22 @@ export function RelationshipEdge({ relationship }: { relationship: Relationship 
       >
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-      <CardinalityMarker position={sourceMarkerPos} text={sourceCardinality} color={style.color} />
-      <CardinalityMarker position={targetMarkerPos} text={targetCardinality} color={style.color} />
-      {relationship.cardinality === "N:M" && (
+      {relationship.direction === "two-way" ? (
         <>
           <ArrowHead tip={sourceArrow.tip} direction={sourceArrow.direction} color={style.color} />
           <ArrowHead tip={targetArrow.tip} direction={targetArrow.direction} color={style.color} />
         </>
+      ) : (
+        <ArrowHead tip={targetArrow.tip} direction={targetArrow.direction} color={style.color} />
       )}
     </group>
   );
 }
 
-// N:M is the one cardinality that's inherently bidirectional (many on both sides), so it's the
-// only one that gets arrowheads — 1:1/1:N keep just the text cardinality markers, unchanged.
+// The arrow itself is the only directionality cue now — a relationship has no meaningful
+// "1"/"N" multiplicity to label since decision #7's rename away from ER-diagram cardinality.
+// "one-way" gets a single arrowhead at the target end (source -> target); "two-way" gets one at
+// both ends, unchanged from before.
 function ArrowHead({
   tip,
   direction,
@@ -171,31 +163,5 @@ function ArrowHead({
       <coneGeometry args={[ARROW_RADIUS, ARROW_LENGTH, 12]} />
       <meshBasicMaterial color={color} />
     </mesh>
-  );
-}
-
-function CardinalityMarker({
-  position,
-  text,
-  color,
-}: {
-  position: THREE.Vector3;
-  text: string;
-  color: string;
-}) {
-  return (
-    <Billboard position={position}>
-      <Text
-        fontSize={0.3}
-        color={color}
-        anchorX="center"
-        anchorY="middle"
-        outlineWidth={0.015}
-        outlineColor="black"
-        outlineOpacity={0.6}
-      >
-        {text}
-      </Text>
-    </Billboard>
   );
 }

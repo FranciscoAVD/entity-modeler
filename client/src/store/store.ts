@@ -4,7 +4,7 @@ import type { ProjectDetail } from "shared";
 import { autoLayoutProject } from "@/scene/autoLayout";
 import { projectIdForNode, projectIdForOrbit, spacesInProject } from "./selectors";
 import type {
-  Cardinality,
+  Direction,
   Node,
   Note,
   NoteTargetType,
@@ -59,11 +59,11 @@ export interface ModelActions {
   addRelationship(input: {
     sourceId: string;
     targetId: string;
-    cardinality: Cardinality;
+    direction: Direction;
     tags?: string[];
     metadata?: Record<string, string | number>;
   }): string;
-  updateRelationshipCardinality(relationshipId: string, cardinality: Cardinality): void;
+  updateRelationshipDirection(relationshipId: string, direction: Direction): void;
   updateRelationshipEndpoints(
     relationshipId: string,
     endpoints: { sourceId: string; targetId: string },
@@ -305,7 +305,7 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     return id;
   },
 
-  addRelationship({ sourceId, targetId, cardinality, tags, metadata }) {
+  addRelationship({ sourceId, targetId, direction, tags, metadata }) {
     if (sourceId === targetId) throw new Error("A relationship cannot connect a node to itself");
 
     const state = get();
@@ -322,7 +322,7 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
       id,
       sourceId,
       targetId,
-      cardinality,
+      direction,
       tagIds,
       notes: [],
       metadata,
@@ -331,13 +331,13 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     return id;
   },
 
-  updateRelationshipCardinality(relationshipId, cardinality) {
+  updateRelationshipDirection(relationshipId, direction) {
     const state = get();
     const relationship = state.relationships.get(relationshipId);
     if (!relationship) throw new Error(`Relationship not found: ${relationshipId}`);
 
     const relationships = new Map(state.relationships);
-    relationships.set(relationshipId, { ...relationship, cardinality });
+    relationships.set(relationshipId, { ...relationship, direction });
     set({ relationships });
   },
 

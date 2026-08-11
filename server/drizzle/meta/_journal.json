@@ -15,6 +15,13 @@
       "when": 1786452421497,
       "tag": "0001_notes_single_table_fk",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786470141054,
+      "tag": "0002_relationship_direction",
+      "breakpoints": true
     }
   ]
 }

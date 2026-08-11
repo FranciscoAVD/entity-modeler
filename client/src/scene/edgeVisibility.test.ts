@@ -21,7 +21,7 @@ function seedRelationship(orbitId?: string) {
   const resolvedOrbitId = orbitId ?? addOrbit({ spaceId, name: "O" });
   const a = addNode({ spaceId, orbitId: resolvedOrbitId, name: "A" });
   const b = addNode({ spaceId, orbitId: resolvedOrbitId, name: "B" });
-  const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+  const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
   return { spaceId, orbitId: resolvedOrbitId, relId };
 }
 
@@ -59,7 +59,7 @@ describe("isRelationshipVisible", () => {
     const orbitA = addOrbit({ spaceId, name: "OA" });
     const a = addNode({ spaceId, orbitId: orbitA, name: "A" });
     const b = addNode({ spaceId, name: "Ungrouped" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(
       isRelationshipVisible(useModelStore.getState(), relId, new Set(), new Set([orbitA])),

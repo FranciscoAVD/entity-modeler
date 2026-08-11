@@ -52,13 +52,17 @@ export interface Node {
   metadata?: Record<string, string | number>;
 }
 
-export type Cardinality = "1:1" | "1:N" | "N:M";
+// Replaces the earlier ER-diagram-style "1:1"/"1:N"/"N:M" cardinality — sourceId/targetId already
+// encode direction structurally, so the only genuinely independent piece of information is
+// whether that direction is meaningful at all. See shared/src/schemas.ts's DirectionSchema for
+// the full reasoning (mirrored here, kept a separately-declared type per decision #15).
+export type Direction = "one-way" | "two-way";
 
 export interface Relationship {
   id: string;
   sourceId: string;
   targetId: string;
-  cardinality: Cardinality;
+  direction: Direction;
   tagIds: string[];
   notes: Note[];
   metadata?: Record<string, string | number>;

@@ -65,7 +65,7 @@ export const relationships = sqliteTable("relationships", {
   targetId: text("target_id")
     .notNull()
     .references(() => nodes.id, { onDelete: "cascade" }),
-  cardinality: text("cardinality", { enum: ["1:1", "1:N", "N:M"] }).notNull(),
+  direction: text("direction", { enum: ["one-way", "two-way"] }).notNull(),
   metadata: text("metadata", { mode: "json" }).$type<Metadata>(),
 });
 

@@ -73,7 +73,7 @@ describe("resolveCameraFocus", () => {
     const spaceId = addSpace({ projectId, name: "S" });
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
     // Patched after creation, since addRelationship itself triggers a relayout that would
     // otherwise overwrite these — nothing runs layout again after this point.
     useModelStore.setState((state) => ({

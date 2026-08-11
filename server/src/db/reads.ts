@@ -170,7 +170,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
       id: r.id,
       sourceId: r.sourceId,
       targetId: r.targetId,
-      cardinality: r.cardinality,
+      direction: r.direction,
       tagIds: (relationshipTagsByTarget.get(r.id) ?? []).map((t) => t.tagId),
       notes: (notesByRelationship.get(r.id) ?? []).map(toNote),
       metadata: r.metadata ?? undefined,

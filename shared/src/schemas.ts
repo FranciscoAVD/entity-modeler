@@ -73,14 +73,21 @@ export const NodeSchema = z.object({
 });
 export type Node = z.infer<typeof NodeSchema>;
 
-export const CardinalitySchema = z.enum(["1:1", "1:N", "N:M"]);
-export type Cardinality = z.infer<typeof CardinalitySchema>;
+// Replaces the earlier ER-diagram-style "1:1"/"1:N"/"N:M" cardinality — that alluded to database
+// schema multiplicity, a narrower assumption than this tool intends (see plan.md's own
+// network-topology example). A relationship's sourceId/targetId already encode direction
+// structurally; the only genuinely independent piece of information is whether that direction is
+// meaningful at all. "one-way"/"two-way" is the whole stored vocabulary — the three-type framing
+// a user sees ("Outgoing"/"Incoming"/"Bidirectional") is derived per-node from this plus whichever
+// endpoint they're looking from, not separately stored.
+export const DirectionSchema = z.enum(["one-way", "two-way"]);
+export type Direction = z.infer<typeof DirectionSchema>;
 
 export const RelationshipSchema = z.object({
   id: z.string(),
   sourceId: z.string(),
   targetId: z.string(),
-  cardinality: CardinalitySchema,
+  direction: DirectionSchema,
   tagIds: z.array(z.string()),
   notes: z.array(NoteSchema),
   metadata: MetadataSchema.optional(),

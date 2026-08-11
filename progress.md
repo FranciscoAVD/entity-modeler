@@ -1404,6 +1404,83 @@ open. Presentational-only, no test coverage to update (consistent with how the r
 `SidebarTree.tsx` is tested — not at all, per this project's standing "pure logic only"
 testing convention).
 
+**Relationship "cardinality" renamed to "direction" — a real semantic simplification, not
+just a rename** (`shared/src/schemas.ts`, `client/src/store/{types,store}.ts`,
+`client/src/scene/{RelationshipEdge,InfoPanel,SidebarTree,AddRelationshipDialog}.tsx`,
+`server/src/db/{schema,reads,writes,seed}.ts`, `server/src/db/persistence.test.ts`, ~8
+client test files, `plan.md`)
+User-driven correction: the `"1:1" | "1:N" | "N:M"` cardinality field was ER-diagram
+terminology alluding to database-schema multiplicity, a narrower assumption than this
+tool intends — and only ever really used for one thing in the UI anyway (whether an
+edge got a bidirectional icon/arrowheads). Planned out before writing code: the user
+asked for name suggestions first, several schemes were proposed with rendered previews,
+`direction: "one-way" | "two-way"` was picked.
+- **Model insight surfaced during naming, not assumed going in**: `sourceId`/`targetId`
+  already encode direction structurally, so the only genuinely independent piece of
+  information worth storing is whether that direction is *meaningful* at all — a
+  relationship only needs two stored states, not three. The "three types in respect to
+  a single node" the user described (Outgoing/Incoming/Bidirectional) turned out to be
+  a *derived*, per-node-perspective label, not three raw stored values: a two-way
+  relationship always reads as "Bidirectional" regardless of which endpoint you're
+  looking from; a one-way relationship reads as "Outgoing" from its source and
+  "Incoming" from its target. Confirmed with the user before implementing.
+- **Rendering got measurably better, not just renamed**: `RelationshipEdge.tsx`'s old
+  "1"/"N" billboarded text markers at each endpoint had no meaning left once
+  multiplicity is gone, so `CardinalityMarker` and `splitCardinality` are deleted
+  outright rather than kept as dead code. Direction is now conveyed purely by
+  arrowheads — one-way gets a single arrowhead at the target end (previously,
+  one-directional relationships got *no* directional cue at all beyond the "1"/"N"
+  text); two-way keeps the existing double-arrowhead treatment unchanged. `MARKER_T`
+  constant and the `Billboard`/`Text` imports it needed are gone too.
+- `store.ts`'s `updateRelationshipCardinality` → `updateRelationshipDirection`, same
+  shape. Icon-choice logic in `InfoPanel.tsx`/`SidebarTree.tsx` (bidirectional icon vs.
+  single-arrow icon) just swaps its condition from `=== "N:M"` to `=== "two-way"`, no
+  other change — it was already effectively a directionality check wearing cardinality
+  clothing.
+- **Server migration hand-written**, same reason as the two earlier schema-changing
+  passes this session (`drizzle-kit generate`'s interactive rename-detection needs a
+  TTY this environment doesn't have): `--custom` for an empty migration file (which
+  again silently left the snapshot stale, same gotcha as before — patched
+  `meta/0002_snapshot.json` by hand, verified with a follow-up `generate` reporting no
+  diff). `ALTER TABLE relationships RENAME COLUMN cardinality TO direction` — a plain
+  rename is sufficient at the schema level since there's no DB-level CHECK constraint
+  backing Drizzle's `{enum: [...]}` (confirmed by checking the original migration's
+  SQL: just `text NOT NULL`, no constraint). The stored *values* ("1:1" etc.) don't
+  carry over as meaningful "one-way"/"two-way" values though, so — same call as the
+  notes-FK and wire-flattening passes — wiped `server/data/app.db` and let it reseed
+  rather than write a value-remapping migration for what's still just demo data.
+  Seed's three relationships mapped 1:1→one-way, 1:N→one-way, N:M→two-way (matching how
+  N:M was already the only one treated as bidirectional in the old UI); a seed note's
+  prose ("Cardinality widened from `1:N` to `N:M`...") reworded to match.
+- **Process-leak recurrence, caught and fixed again**: mid-verification, a fresh
+  `bun run --hot` boot failed with `EADDRINUSE` on port 3001 — a `bun run dev` (the
+  root parallel-dev script) had been running unnoticed since early in *this* session,
+  the same leaked-background-process pattern documented earlier this file under
+  "Notable bugs." Killed by PID, verified via both `ps aux` and a port check before
+  retrying. Underscores that the documented lesson (verify a background process is
+  actually dead by PID/port, not just by re-running the same check) needs to actually
+  be *applied* each time, not just written down once.
+- Test fixtures: ~8 files' incidental `cardinality: "1:1"|"1:N"|"N:M"` fixtures
+  mechanically replaced with `direction: "one-way"|"two-way"` (1:1/1:N → one-way, N:M →
+  two-way) via a scoped `sed` pass; `store.test.ts`'s dedicated
+  `describe("updateRelationshipCardinality", ...)` suite hand-rewritten (renamed to
+  `updateRelationshipDirection`, its two `"N:M"` literal arguments/assertions — not
+  matched by the mechanical `cardinality: "..."` pattern — updated to `"two-way"`).
+- Verified end-to-end against a real running server (not just unit tests): fresh
+  reseed, `GET /projects/:id` confirmed all three demo relationships return `direction`
+  (not `cardinality`) with the expected one-way/one-way/two-way values, server fully
+  stopped and confirmed via process list and port check afterward. Also: `tsc -b &&
+  vite build` clean in `client`, `tsc --noEmit` clean in `server`/`shared`, `oxlint`
+  clean (same 4 pre-existing warnings), 116 client tests + 6 server tests passing
+  (unchanged counts — this pass renamed/reshaped existing tests, didn't add or remove
+  coverage). No browser verification done this session (per standing preference) — the
+  new single-arrowhead rendering for one-way relationships in particular is worth a
+  visual check, since nothing exercises actual Three.js rendering in this test suite.
+- `plan.md` updated throughout: the `Relationship` data model shape, the "originally
+  had a cardinality field" explanatory paragraph (same style as the removed `Field`/
+  `Project.notes` notes nearby), the rendering-tiers table, Phase 4's checklist item,
+  Phase 9's shared-schema writeup, and the sidebar-submenu description.
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see

@@ -62,7 +62,7 @@ describe("relationships", () => {
     const nodeId = addNode({ spaceId, name: "Solo" });
 
     expect(() =>
-      addRelationship({ sourceId: nodeId, targetId: nodeId, cardinality: "1:1" }),
+      addRelationship({ sourceId: nodeId, targetId: nodeId, direction: "one-way" }),
     ).toThrow();
   });
 
@@ -73,7 +73,7 @@ describe("relationships", () => {
     const spaceB = addSpace({ projectId, name: "B" });
     const source = addNode({ spaceId: spaceA, name: "Source" });
     const target = addNode({ spaceId: spaceA, name: "Target" });
-    const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:N" });
+    const relId = addRelationship({ sourceId: source, targetId: target, direction: "one-way" });
 
     moveNode(source, { spaceId: spaceB });
 
@@ -82,25 +82,25 @@ describe("relationships", () => {
   });
 });
 
-describe("updateRelationshipCardinality", () => {
-  it("replaces the cardinality without touching sourceId/targetId/notes", () => {
-    const { addNode, addRelationship, updateRelationshipCardinality } = useModelStore.getState();
+describe("updateRelationshipDirection", () => {
+  it("replaces the direction without touching sourceId/targetId/notes", () => {
+    const { addNode, addRelationship, updateRelationshipDirection } = useModelStore.getState();
     const { spaceId } = seedProjectSpace();
     const source = addNode({ spaceId, name: "Source" });
     const target = addNode({ spaceId, name: "Target" });
-    const relId = addRelationship({ sourceId: source, targetId: target, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: source, targetId: target, direction: "one-way" });
 
-    updateRelationshipCardinality(relId, "N:M");
+    updateRelationshipDirection(relId, "two-way");
 
     const relationship = useModelStore.getState().relationships.get(relId);
-    expect(relationship?.cardinality).toBe("N:M");
+    expect(relationship?.direction).toBe("two-way");
     expect(relationship?.sourceId).toBe(source);
     expect(relationship?.targetId).toBe(target);
   });
 
   it("throws for a missing relationship", () => {
-    const { updateRelationshipCardinality } = useModelStore.getState();
-    expect(() => updateRelationshipCardinality("missing", "N:M")).toThrow();
+    const { updateRelationshipDirection } = useModelStore.getState();
+    expect(() => updateRelationshipDirection("missing", "two-way")).toThrow();
   });
 });
 
@@ -111,7 +111,7 @@ describe("updateRelationshipEndpoints", () => {
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
     const c = addNode({ spaceId, name: "C" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     updateRelationshipEndpoints(relId, { sourceId: a, targetId: c });
 
@@ -125,7 +125,7 @@ describe("updateRelationshipEndpoints", () => {
     const { spaceId } = seedProjectSpace();
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(() => updateRelationshipEndpoints(relId, { sourceId: a, targetId: a })).toThrow();
   });
@@ -135,7 +135,7 @@ describe("updateRelationshipEndpoints", () => {
     const { spaceId } = seedProjectSpace();
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(() =>
       updateRelationshipEndpoints("missing", { sourceId: a, targetId: b }),
@@ -375,7 +375,7 @@ describe("tags and metadata", () => {
     const relId = addRelationship({
       sourceId: a,
       targetId: b,
-      cardinality: "1:1",
+      direction: "one-way",
       tags: ["vpn"],
       metadata: { vlan: 12 },
     });
@@ -426,7 +426,7 @@ describe("notes", () => {
     const { spaceId } = seedProjectSpace();
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     const noteId = addNote("relationship", relId, { title: "Path", text: "Direct" });
     updateNote("relationship", relId, noteId, { title: "Path", text: "Via VPN" });
@@ -452,7 +452,7 @@ describe("cascading deletes", () => {
     const orbitId = addOrbit({ spaceId: spaceA, name: "Orbit" });
     const inA = addNode({ spaceId: spaceA, orbitId, name: "InA" });
     const inB = addNode({ spaceId: spaceB, name: "InB" });
-    const relId = addRelationship({ sourceId: inA, targetId: inB, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: inA, targetId: inB, direction: "one-way" });
 
     deleteSpace(spaceA);
 
@@ -490,8 +490,8 @@ describe("delete-impact selectors", () => {
     const inA = addNode({ spaceId: spaceA, orbitId, name: "InA" });
     const ungroupedInA = addNode({ spaceId: spaceA, name: "UngroupedInA" });
     const inB = addNode({ spaceId: spaceB, name: "InB" });
-    addRelationship({ sourceId: inA, targetId: ungroupedInA, cardinality: "1:1" }); // local to A
-    addRelationship({ sourceId: ungroupedInA, targetId: inB, cardinality: "1:N" }); // touches A
+    addRelationship({ sourceId: inA, targetId: ungroupedInA, direction: "one-way" }); // local to A
+    addRelationship({ sourceId: ungroupedInA, targetId: inB, direction: "one-way" }); // touches A
 
     const impact = spaceDeleteImpact(useModelStore.getState(), spaceA);
 
@@ -504,9 +504,9 @@ describe("delete-impact selectors", () => {
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
     const c = addNode({ spaceId, name: "C" });
-    addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
-    addRelationship({ sourceId: c, targetId: a, cardinality: "1:N" });
-    addRelationship({ sourceId: b, targetId: c, cardinality: "N:M" }); // doesn't touch a
+    addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
+    addRelationship({ sourceId: c, targetId: a, direction: "one-way" });
+    addRelationship({ sourceId: b, targetId: c, direction: "two-way" }); // doesn't touch a
 
     expect(nodeDeleteImpact(useModelStore.getState(), a)).toEqual({ relationships: 2 });
   });
@@ -592,7 +592,7 @@ describe("tabs", () => {
     const spaceId = addSpace({ projectId, name: "S" });
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
     openTab(a, "node");
     openTab(relId, "relationship");
 
@@ -719,7 +719,7 @@ describe("tag registry selectors", () => {
     const spaceId = addSpace({ projectId, name: "Space" });
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1", tags: ["vpn"] });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way", tags: ["vpn"] });
 
     const state = useModelStore.getState();
     const tagId = state.relationships.get(relId)!.tagIds[0];
@@ -753,7 +753,7 @@ describe("tabLabel", () => {
     const { spaceId } = seedProjectSpace();
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     const state = useModelStore.getState();
     expect(tabLabel(state, { id: relId, type: "relationship" })).toBe("A → B");
@@ -779,7 +779,7 @@ describe("relationshipScope", () => {
     const orbitId = addOrbit({ spaceId, name: "O" });
     const a = addNode({ spaceId, orbitId, name: "A" });
     const b = addNode({ spaceId, orbitId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
   });
@@ -789,7 +789,7 @@ describe("relationshipScope", () => {
     const { spaceId } = seedProjectSpace();
     const a = addNode({ spaceId, name: "A" });
     const b = addNode({ spaceId, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("local");
   });
@@ -800,7 +800,7 @@ describe("relationshipScope", () => {
     const orbitA = addOrbit({ spaceId, name: "OA" });
     const a = addNode({ spaceId, orbitId: orbitA, name: "A" });
     const b = addNode({ spaceId, name: "Ungrouped" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-orbit");
   });
@@ -812,7 +812,7 @@ describe("relationshipScope", () => {
     const spaceB = addSpace({ projectId, name: "B" });
     const a = addNode({ spaceId: spaceA, name: "A" });
     const b = addNode({ spaceId: spaceB, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(relationshipScope(useModelStore.getState(), relId)).toBe("cross-space");
   });
@@ -826,7 +826,7 @@ describe("relationshipsInProject", () => {
     const spaceB = addSpace({ projectId, name: "B" });
     const a = addNode({ spaceId: spaceA, name: "A" });
     const b = addNode({ spaceId: spaceB, name: "B" });
-    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    const relId = addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     const ids = relationshipsInProject(useModelStore.getState(), projectId).map((r) => r.id);
     expect(ids).toEqual([relId]);
@@ -841,7 +841,7 @@ describe("relationshipsInProject", () => {
     const a = addNode({ spaceId: spaceA, name: "A" });
     const b = addNode({ spaceId: spaceA, name: "B" });
     addNode({ spaceId: spaceB, name: "Other" });
-    addRelationship({ sourceId: a, targetId: b, cardinality: "1:1" });
+    addRelationship({ sourceId: a, targetId: b, direction: "one-way" });
 
     expect(relationshipsInProject(useModelStore.getState(), projectB)).toEqual([]);
   });

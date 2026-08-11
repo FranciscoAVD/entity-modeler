@@ -521,17 +521,17 @@ function NodeRow({
                 relationships.map((relationship) => {
                   const sourceName = nodes.get(relationship.sourceId)?.name ?? "?";
                   const targetName = nodes.get(relationship.targetId)?.name ?? "?";
-                  // Same cardinality → icon mapping as the InfoPanel title: N:M is the one
-                  // inherently-bidirectional cardinality, so it borrows the two-way arrow.
-                  const CardinalityIcon =
-                    relationship.cardinality === "N:M" ? ArrowRightLeft : ArrowRight;
+                  // Same direction → icon mapping as the InfoPanel title: two-way borrows the
+                  // bidirectional arrow, one-way stays a single directional arrow.
+                  const DirectionIcon =
+                    relationship.direction === "two-way" ? ArrowRightLeft : ArrowRight;
                   return (
                     <ContextMenuItem
                       key={relationship.id}
                       onSelect={() => focusOn(relationship.id, "relationship")}
                     >
                       <span className="min-w-0 truncate">{sourceName}</span>
-                      <CardinalityIcon className="mx-1 size-3.5 shrink-0" />
+                      <DirectionIcon className="mx-1 size-3.5 shrink-0" />
                       <span className="min-w-0 truncate">{targetName}</span>
                     </ContextMenuItem>
                   );

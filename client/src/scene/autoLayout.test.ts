@@ -16,7 +16,7 @@ function node(id: string, spaceId: string, orbitId?: string): Node {
   return { id, spaceId, orbitId, name: id, tagIds: [], position: ORIGIN, notes: [] };
 }
 function relationship(id: string, sourceId: string, targetId: string): Relationship {
-  return { id, sourceId, targetId, cardinality: "1:1", tagIds: [], notes: [] };
+  return { id, sourceId, targetId, direction: "one-way", tagIds: [], notes: [] };
 }
 
 describe("layoutGroup", () => {

@@ -94,7 +94,7 @@ export function upsertProject(id: string, data: ProjectDetail): void {
             id: r.id,
             sourceId: r.sourceId,
             targetId: r.targetId,
-            cardinality: r.cardinality,
+            direction: r.direction,
             metadata: r.metadata,
           })),
         )

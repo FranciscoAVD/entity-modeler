@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { nodesInProject } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import type { Cardinality } from "@/store/types";
+import type { Direction } from "@/store/types";
 
 // Unlike space/orbit/node quick-add, a relationship has no meaningful "just a name" default —
 // it needs two real nodes to connect, so this gets its own dialog instead of CreateDialog.
@@ -31,7 +31,7 @@ export function AddRelationshipDialog({
 
   const [sourceId, setSourceId] = useState(initialSourceId ?? "");
   const [targetId, setTargetId] = useState("");
-  const [cardinality, setCardinality] = useState<Cardinality>("1:N");
+  const [direction, setDirection] = useState<Direction>("one-way");
 
   // This dialog instance is reused across opens without unmounting (e.g. one node row's
   // "Add relationship" after another), so the fields need to be re-synced whenever it opens —
@@ -40,7 +40,7 @@ export function AddRelationshipDialog({
     if (open) {
       setSourceId(initialSourceId ?? "");
       setTargetId("");
-      setCardinality("1:N");
+      setDirection("one-way");
     }
   }, [open, initialSourceId]);
 
@@ -62,7 +62,7 @@ export function AddRelationshipDialog({
 
   const submit = () => {
     if (!canSubmit) return;
-    addRelationship({ sourceId, targetId, cardinality });
+    addRelationship({ sourceId, targetId, direction });
     close(false);
   };
 
@@ -97,17 +97,13 @@ export function AddRelationshipDialog({
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={cardinality}
-            onValueChange={(value) => setCardinality(value as Cardinality)}
-          >
+          <Select value={direction} onValueChange={(value) => setDirection(value as Direction)}>
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="1:1">1:1</SelectItem>
-              <SelectItem value="1:N">1:N</SelectItem>
-              <SelectItem value="N:M">N:M</SelectItem>
+              <SelectItem value="one-way">One-way</SelectItem>
+              <SelectItem value="two-way">Two-way</SelectItem>
             </SelectContent>
           </Select>
         </div>
