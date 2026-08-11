@@ -170,6 +170,24 @@ describe("upsertProject / loadProjectDetail round-trip", () => {
   it("returns undefined for a project id that doesn't exist", async () => {
     expect(await loadProjectDetail(crypto.randomUUID())).toBeUndefined();
   });
+
+  it("orders the project list by name, not save order — re-saving a project must not move it", async () => {
+    const idA = crypto.randomUUID();
+    const idB = crypto.randomUUID();
+    const idC = crypto.randomUUID();
+    upsertProject(idA, minimalProject(idA, { project: { id: idA, name: "Zebra" } }));
+    upsertProject(idB, minimalProject(idB, { project: { id: idB, name: "Apple" } }));
+    upsertProject(idC, minimalProject(idC, { project: { id: idC, name: "Mango" } }));
+
+    // Regression case: upsertProject deletes and reinserts the projects row itself (to let the
+    // FK cascade clear its children), which used to give it a new rowid and move it to the end
+    // of an unordered scan — re-saving "Zebra" here must not change its alphabetical position.
+    upsertProject(idA, minimalProject(idA, { project: { id: idA, name: "Zebra" } }));
+
+    const ids = new Set<string>([idA, idB, idC]);
+    const names = (await loadProjectList()).filter((p) => ids.has(p.id)).map((p) => p.name);
+    expect(names).toEqual(["Apple", "Mango", "Zebra"]);
+  });
 });
 
 describe("deleteProject", () => {

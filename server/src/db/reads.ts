@@ -1,4 +1,4 @@
-import { eq, inArray, or } from "drizzle-orm";
+import { asc, eq, inArray, or } from "drizzle-orm";
 import type { Note, OrbitDetail, ProjectDetail, ProjectSummary, SpaceDetail, Tag } from "shared";
 import { ProjectDetailSchema } from "shared";
 import { db } from "./connection";
@@ -16,8 +16,14 @@ import {
   tags,
 } from "./schema";
 
+// Ordered explicitly (SQLite gives no ordering guarantee without one) — without this, App.tsx's
+// "load list[0] on boot" would be at the mercy of table scan order, which silently changes
+// whenever a project is saved: upsertProject deletes and reinserts the `projects` row itself (to
+// let the FK cascade clear its children), giving that row a new rowid and moving it to the end of
+// an unordered scan — so the project that loads by default could flip after any edit to any
+// project, reading as "different seeded data on reload."
 export async function loadProjectList(): Promise<ProjectSummary[]> {
-  const rows = await db.select().from(projects);
+  const rows = await db.select().from(projects).orderBy(asc(projects.name));
   return rows.map((p) => ({ id: p.id, name: p.name, description: p.description ?? undefined }));
 }
 

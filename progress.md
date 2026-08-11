@@ -2,7 +2,7 @@
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
-live — see Phase 9 below. 101 client tests + 5 server tests passing, build/lint clean
+live — see Phase 9 below. 101 client tests + 6 server tests passing, build/lint clean
 in both packages. Full plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 →
 3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11`.
 
@@ -1118,6 +1118,28 @@ to show.
   101 tests passing (up from 100). No browser verification done this session (per standing
   preference) — worth clicking the "vpn" tag in the demo project to confirm the
   relationship now shows up and focuses correctly.
+
+**Bug fix: the project loaded on boot could silently change between reloads**
+(`server/src/db/reads.ts`, `server/src/db/persistence.test.ts`)
+User report: "different seeded data on reload." Not actually different seed content —
+`loadProjectList()`'s `db.select().from(projects)` had no `ORDER BY`, so SQLite's scan
+order (rowid order for a plain table scan) was whatever it happened to be, and
+`upsertProject`'s autosave path deletes and reinserts the `projects` row itself on every
+save (necessary so the FK cascade can clear that project's spaces/orbits/nodes/
+relationships) — giving the row a new rowid and moving it to the end of that unordered
+scan. `App.tsx` always loads `list[0]` on boot with nothing persisting "last active
+project" (no `localStorage` use anywhere in the client), so with more than one project in
+the switcher, whichever one loads by default could flip after *any* edit to *any*
+project — reading exactly like the seed data itself was changing.
+- Fixed with `.orderBy(asc(projects.name))` — deterministic, and reasonable default
+  behavior for a project switcher regardless of this bug.
+- New regression test in `persistence.test.ts`: creates three projects, re-saves one
+  (triggering the delete+reinsert), asserts the list stays alphabetically ordered rather
+  than reflecting save order.
+- Deliberately not fixed here, out of scope: `upsertProject` still deletes+reinserts the
+  `projects` row on every save (that's structural to the "full-project replace via FK
+  cascade" design, not a bug) — only the missing ordering was the actual defect.
+- Verified: server `tsc --noEmit` clean, 6/6 server tests passing (up from 5).
 
 ## TODO — remaining phases
 
