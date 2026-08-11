@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 import type { ProjectDetail } from "shared";
-import { subtract } from "@/lib/vector3";
-import { getOrbitWorldOrigin, getWorldPosition, projectIdForNode, spacesInProject } from "./selectors";
+import { autoLayoutProject } from "@/scene/autoLayout";
+import { projectIdForNode, projectIdForOrbit, spacesInProject } from "./selectors";
 import type {
   Cardinality,
   Node,
@@ -39,7 +39,6 @@ export interface ModelActions {
     projectId: string;
     name: string;
     label?: string;
-    origin?: Vector3;
     tags?: string[];
     metadata?: Record<string, string | number>;
   }): string;
@@ -47,7 +46,6 @@ export interface ModelActions {
     spaceId: string;
     name: string;
     label?: string;
-    origin?: Vector3;
     tags?: string[];
     metadata?: Record<string, string | number>;
   }): string;
@@ -56,7 +54,6 @@ export interface ModelActions {
     orbitId?: string;
     name: string;
     tags?: string[];
-    position?: Vector3;
     metadata?: Record<string, string | number>;
   }): string;
   addRelationship(input: {
@@ -73,7 +70,6 @@ export interface ModelActions {
   ): void;
 
   moveNode(nodeId: string, target: { spaceId: string; orbitId?: string }): void;
-  updateNodePosition(nodeId: string, position: Vector3): void;
   renameSpace(spaceId: string, name: string): void;
   renameOrbit(orbitId: string, name: string): void;
   renameNode(nodeId: string, name: string): void;
@@ -261,28 +257,20 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     return id;
   },
 
-  addSpace({ projectId, name, label, origin, tags, metadata }) {
+  addSpace({ projectId, name, label, tags, metadata }) {
     const state = get();
     if (!state.projects.has(projectId)) throw new Error(`Project not found: ${projectId}`);
 
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], projectId);
     const id = crypto.randomUUID();
     const spaces = new Map(state.spaces);
-    spaces.set(id, {
-      id,
-      projectId,
-      name,
-      label,
-      origin: origin ?? ORIGIN,
-      tagIds,
-      notes: [],
-      metadata,
-    });
-    set({ spaces, tags: nextTags });
+    spaces.set(id, { id, projectId, name, label, origin: ORIGIN, tagIds, notes: [], metadata });
+
+    set({ ...autoLayoutProject({ ...state, spaces }, projectId), tags: nextTags });
     return id;
   },
 
-  addOrbit({ spaceId, name, label, origin, tags, metadata }) {
+  addOrbit({ spaceId, name, label, tags, metadata }) {
     const state = get();
     const parentSpace = state.spaces.get(spaceId);
     if (!parentSpace) throw new Error(`Space not found: ${spaceId}`);
@@ -290,21 +278,13 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], parentSpace.projectId);
     const id = crypto.randomUUID();
     const orbits = new Map(state.orbits);
-    orbits.set(id, {
-      id,
-      spaceId,
-      name,
-      label,
-      origin: origin ?? ORIGIN,
-      tagIds,
-      notes: [],
-      metadata,
-    });
-    set({ orbits, tags: nextTags });
+    orbits.set(id, { id, spaceId, name, label, origin: ORIGIN, tagIds, notes: [], metadata });
+
+    set({ ...autoLayoutProject({ ...state, orbits }, parentSpace.projectId), tags: nextTags });
     return id;
   },
 
-  addNode({ spaceId, orbitId, name, tags, position, metadata }) {
+  addNode({ spaceId, orbitId, name, tags, metadata }) {
     const state = get();
     const parentSpace = state.spaces.get(spaceId);
     if (!parentSpace) throw new Error(`Space not found: ${spaceId}`);
@@ -319,17 +299,9 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     const { tagIds, tags: nextTags } = resolveTagIds(state.tags, tags ?? [], parentSpace.projectId);
     const id = crypto.randomUUID();
     const nodes = new Map(state.nodes);
-    nodes.set(id, {
-      id,
-      spaceId,
-      orbitId,
-      name,
-      tagIds,
-      position: position ?? ORIGIN,
-      notes: [],
-      metadata,
-    });
-    set({ nodes, tags: nextTags });
+    nodes.set(id, { id, spaceId, orbitId, name, tagIds, position: ORIGIN, notes: [], metadata });
+
+    set({ ...autoLayoutProject({ ...state, nodes }, parentSpace.projectId), tags: nextTags });
     return id;
   },
 
@@ -355,7 +327,7 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
       notes: [],
       metadata,
     });
-    set({ relationships, tags: nextTags });
+    set({ ...autoLayoutProject({ ...state, relationships }, projectId), relationships, tags: nextTags });
     return id;
   },
 
@@ -380,9 +352,16 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
 
     const relationships = new Map(state.relationships);
     relationships.set(relationshipId, { ...relationship, sourceId, targetId });
-    set({ relationships });
+
+    const projectId = projectIdForNode(state, sourceId);
+    if (!projectId) throw new Error(`Project not found for node: ${sourceId}`);
+    set({ ...autoLayoutProject({ ...state, relationships }, projectId), relationships });
   },
 
+  // Re-parenting is the *only* way a user influences position — there's no manual coordinate
+  // entry or dragging (plan.md Phase 7). autoLayoutProject recomputes every position in the
+  // target project from scratch afterward, so this just needs to reassign spaceId/orbitId; any
+  // "preserve the old local offset" math would be immediately overwritten anyway.
   moveNode(nodeId, { spaceId, orbitId }) {
     const state = get();
     const node = state.nodes.get(nodeId);
@@ -397,27 +376,9 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
       }
     }
 
-    // Re-base position so the node's *world* position is preserved across the move — its old
-    // local offset was relative to the old parent's origin, and would otherwise be silently
-    // reinterpreted against the new one. Relationships reference nodes by id and are never
-    // touched by a move.
-    const worldPosition = getWorldPosition(state, nodeId);
-    const newParentOrigin = orbitId !== undefined ? getOrbitWorldOrigin(state, orbitId) : newSpace.origin;
-    const position = subtract(worldPosition, newParentOrigin);
-
     const nodes = new Map(state.nodes);
-    nodes.set(nodeId, { ...node, spaceId, orbitId, position });
-    set({ nodes });
-  },
-
-  updateNodePosition(nodeId, position) {
-    const state = get();
-    const node = state.nodes.get(nodeId);
-    if (!node) throw new Error(`Node not found: ${nodeId}`);
-
-    const nodes = new Map(state.nodes);
-    nodes.set(nodeId, { ...node, position });
-    set({ nodes });
+    nodes.set(nodeId, { ...node, spaceId, orbitId });
+    set(autoLayoutProject({ ...state, nodes }, newSpace.projectId));
   },
 
   renameSpace(spaceId, name) {
@@ -620,7 +581,9 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
 
   deleteSpace(spaceId) {
     const state = get();
-    if (!state.spaces.has(spaceId)) throw new Error(`Space not found: ${spaceId}`);
+    const deletedSpace = state.spaces.get(spaceId);
+    if (!deletedSpace) throw new Error(`Space not found: ${spaceId}`);
+    const projectId = deletedSpace.projectId;
 
     const orbitIds = new Set(
       [...state.orbits.values()].filter((o) => o.spaceId === spaceId).map((o) => o.id),
@@ -649,12 +612,19 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     const removedTabIds = new Set([spaceId, ...orbitIds, ...nodeIds, ...relationshipIds]);
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, removedTabIds);
 
-    set({ spaces, orbits, nodes, relationships, openTabs, activeTabId });
+    set({
+      ...autoLayoutProject({ ...state, spaces, orbits, nodes, relationships }, projectId),
+      relationships,
+      openTabs,
+      activeTabId,
+    });
   },
 
   deleteOrbit(orbitId) {
     const state = get();
     if (!state.orbits.has(orbitId)) throw new Error(`Orbit not found: ${orbitId}`);
+    const projectId = projectIdForOrbit(state, orbitId);
+    if (!projectId) throw new Error(`Project not found for orbit: ${orbitId}`);
 
     const orbits = new Map(state.orbits);
     orbits.delete(orbitId);
@@ -668,12 +638,14 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
 
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, new Set([orbitId]));
 
-    set({ orbits, nodes, openTabs, activeTabId });
+    set({ ...autoLayoutProject({ ...state, orbits, nodes }, projectId), openTabs, activeTabId });
   },
 
   deleteNode(nodeId) {
     const state = get();
     if (!state.nodes.has(nodeId)) throw new Error(`Node not found: ${nodeId}`);
+    const projectId = projectIdForNode(state, nodeId);
+    if (!projectId) throw new Error(`Project not found for node: ${nodeId}`);
 
     const nodes = new Map(state.nodes);
     nodes.delete(nodeId);
@@ -689,14 +661,22 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     const removedTabIds = new Set([nodeId, ...relationshipIds]);
     const { openTabs, activeTabId } = pruneTabs(state.openTabs, state.activeTabId, removedTabIds);
 
-    set({ nodes, relationships, openTabs, activeTabId });
+    set({
+      ...autoLayoutProject({ ...state, nodes, relationships }, projectId),
+      relationships,
+      openTabs,
+      activeTabId,
+    });
   },
 
   deleteRelationship(relationshipId) {
     const state = get();
-    if (!state.relationships.has(relationshipId)) {
+    const deletedRelationship = state.relationships.get(relationshipId);
+    if (!deletedRelationship) {
       throw new Error(`Relationship not found: ${relationshipId}`);
     }
+    const projectId = projectIdForNode(state, deletedRelationship.sourceId);
+    if (!projectId) throw new Error(`Project not found for relationship: ${relationshipId}`);
 
     const relationships = new Map(state.relationships);
     relationships.delete(relationshipId);
@@ -707,7 +687,7 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
       new Set([relationshipId]),
     );
 
-    set({ relationships, openTabs, activeTabId });
+    set({ ...autoLayoutProject({ ...state, relationships }, projectId), relationships, openTabs, activeTabId });
   },
 
   addNote(targetType, targetId, note) {

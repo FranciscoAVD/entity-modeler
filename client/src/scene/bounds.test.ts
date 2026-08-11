@@ -30,15 +30,14 @@ describe("space radius and emptiness", () => {
     expect(isSpaceEmpty(useModelStore.getState(), spaceId)).toBe(true);
   });
 
-  it("grows as more orbits/ungrouped nodes are added, regardless of their position", () => {
+  it("grows as more orbits/ungrouped nodes are added", () => {
     const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const before = computeSpaceRadius(useModelStore.getState(), spaceId);
 
-    // Far-flung origin/position must not matter — only presence does.
-    addOrbit({ spaceId, name: "O", origin: { x: 500, y: 0, z: 0 } });
-    addNode({ spaceId, name: "Ungrouped", position: { x: -500, y: 0, z: 0 } });
+    addOrbit({ spaceId, name: "O" });
+    addNode({ spaceId, name: "Ungrouped" });
 
     expect(computeSpaceRadius(useModelStore.getState(), spaceId)).toBeGreaterThan(before);
     expect(isSpaceEmpty(useModelStore.getState(), spaceId)).toBe(false);
@@ -94,29 +93,33 @@ describe("orbit radius and emptiness", () => {
     expect(isOrbitEmpty(useModelStore.getState(), orbitId)).toBe(true);
   });
 
-  it("grows as more nodes are added, regardless of their position", () => {
+  it("grows as more nodes are added", () => {
     const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const orbitId = addOrbit({ spaceId, name: "O" });
     const before = computeOrbitRadius(useModelStore.getState(), orbitId);
 
-    addNode({ spaceId, orbitId, name: "E", position: { x: 500, y: 0, z: 0 } });
+    addNode({ spaceId, orbitId, name: "E" });
 
     expect(computeOrbitRadius(useModelStore.getState(), orbitId)).toBeGreaterThan(before);
     expect(isOrbitEmpty(useModelStore.getState(), orbitId)).toBe(false);
   });
 
-  it("is unaffected by moving a node within the orbit", () => {
-    const { addProject, addSpace, addOrbit, addNode, updateNodePosition } =
-      useModelStore.getState();
+  // Positions are entirely auto-layout's responsibility now (plan.md Phase 7) — patched directly
+  // via setState (bypassing the actions, which would relayout and recompute it anyway) to confirm
+  // radius really is a pure function of count, not wherever a node's position happens to land.
+  it("is unaffected by a node's position within the orbit", () => {
+    const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
     const orbitId = addOrbit({ spaceId, name: "O" });
     const nodeId = addNode({ spaceId, orbitId, name: "E" });
     const before = computeOrbitRadius(useModelStore.getState(), orbitId);
 
-    updateNodePosition(nodeId, { x: 1000, y: 1000, z: 1000 });
+    useModelStore.setState((state) => ({
+      nodes: new Map(state.nodes).set(nodeId, { ...state.nodes.get(nodeId)!, position: { x: 1000, y: 1000, z: 1000 } }),
+    }));
 
     expect(computeOrbitRadius(useModelStore.getState(), orbitId)).toBe(before);
   });

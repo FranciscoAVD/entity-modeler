@@ -26,8 +26,12 @@ describe("resolveCameraFocus", () => {
   it("focuses the active node tab", () => {
     const { addProject, addSpace, addNode, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceId = addSpace({ projectId, name: "S", origin: { x: 10, y: 0, z: 0 } });
-    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const nodeId = addNode({ spaceId, name: "E" });
+    useModelStore.setState((state) => ({
+      spaces: new Map(state.spaces).set(spaceId, { ...state.spaces.get(spaceId)!, origin: { x: 10, y: 0, z: 0 } }),
+      nodes: new Map(state.nodes).set(nodeId, { ...state.nodes.get(nodeId)!, position: { x: 1, y: 0, z: 0 } }),
+    }));
     openTab(nodeId, "node");
 
     const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
@@ -39,7 +43,10 @@ describe("resolveCameraFocus", () => {
     const { addProject, addSpace, addOrbit, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 2, y: 0, z: 0 } });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    useModelStore.setState((state) => ({
+      orbits: new Map(state.orbits).set(orbitId, { ...state.orbits.get(orbitId)!, origin: { x: 2, y: 0, z: 0 } }),
+    }));
     openTab(orbitId, "orbit");
 
     const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
@@ -58,9 +65,16 @@ describe("resolveCameraFocus", () => {
     const { addProject, addSpace, addNode, addRelationship, openTab } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const a = addNode({ spaceId, name: "A", position: { x: 0, y: 0, z: 0 } });
-    const b = addNode({ spaceId, name: "B", position: { x: 10, y: 0, z: 0 } });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
     const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:N" });
+    // Patched after creation, since addRelationship itself triggers a relayout that would
+    // otherwise overwrite these — nothing runs layout again after this point.
+    useModelStore.setState((state) => ({
+      nodes: new Map(state.nodes)
+        .set(a, { ...state.nodes.get(a)!, position: { x: 0, y: 0, z: 0 } })
+        .set(b, { ...state.nodes.get(b)!, position: { x: 10, y: 0, z: 0 } }),
+    }));
     openTab(relId, "relationship");
 
     const focus = resolveCameraFocus(useModelStore.getState(), 0, false, null, false, NONE, NONE);
@@ -85,7 +99,10 @@ describe("resolveCameraFocus", () => {
   it("focuses an explicit space target, sized to its radius", () => {
     const { addProject, addSpace } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceId = addSpace({ projectId, name: "S", origin: { x: 4, y: 0, z: 0 } });
+    const spaceId = addSpace({ projectId, name: "S" });
+    useModelStore.setState((state) => ({
+      spaces: new Map(state.spaces).set(spaceId, { ...state.spaces.get(spaceId)!, origin: { x: 4, y: 0, z: 0 } }),
+    }));
 
     const focus = resolveCameraFocus(
       useModelStore.getState(),

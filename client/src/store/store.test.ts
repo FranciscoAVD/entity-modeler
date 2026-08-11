@@ -146,58 +146,49 @@ describe("updateRelationshipEndpoints", () => {
   });
 });
 
+// Position/origin are entirely auto-layout's responsibility now (plan.md Phase 7) — moveNode's
+// own job is just re-parenting (reassigning spaceId/orbitId, with the same validation every other
+// action already has); world-position preservation across a move is gone, since auto-layout
+// recomputes every position in the target project from scratch right after. Layout-algorithm
+// behavior itself (does a moved node end up somewhere reasonable, does the graph reconverge) is
+// autoLayout.test.ts's job, not this file's.
 describe("moveNode", () => {
-  it("preserves world position when moving into a space with a different origin", () => {
-    const { addProject, addSpace, addNode, moveNode } = useModelStore.getState();
+  it("reassigns spaceId, dropping orbitId when none is given", () => {
+    const { addProject, addSpace, addOrbit, addNode, moveNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceA = addSpace({ projectId, name: "A", origin: { x: 0, y: 0, z: 0 } });
-    const spaceB = addSpace({ projectId, name: "B", origin: { x: 100, y: 0, z: 0 } });
-    const nodeId = addNode({ spaceId: spaceA, name: "E", position: { x: 1, y: 2, z: 3 } });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const orbitId = addOrbit({ spaceId: spaceA, name: "O" });
+    const nodeId = addNode({ spaceId: spaceA, orbitId, name: "E" });
 
-    const before = getWorldPosition(useModelStore.getState(), nodeId);
     moveNode(nodeId, { spaceId: spaceB });
-    const after = getWorldPosition(useModelStore.getState(), nodeId);
 
-    expect(after).toEqual(before);
-    expect(useModelStore.getState().nodes.get(nodeId)?.position).toEqual({
-      x: -99,
-      y: 2,
-      z: 3,
-    });
+    const node = useModelStore.getState().nodes.get(nodeId);
+    expect(node?.spaceId).toBe(spaceB);
+    expect(node?.orbitId).toBeUndefined();
   });
 
-  it("preserves world position when moving into an orbit with a different origin", () => {
+  it("reassigns spaceId and orbitId together", () => {
     const { addProject, addSpace, addOrbit, addNode, moveNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
     const spaceId = addSpace({ projectId, name: "S" });
-    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
-    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 1, z: 1 } });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    const nodeId = addNode({ spaceId, name: "E" });
 
-    const before = getWorldPosition(useModelStore.getState(), nodeId);
     moveNode(nodeId, { spaceId, orbitId });
-    const after = getWorldPosition(useModelStore.getState(), nodeId);
 
-    expect(after).toEqual(before);
     expect(useModelStore.getState().nodes.get(nodeId)?.orbitId).toBe(orbitId);
   });
-});
 
-describe("updateNodePosition", () => {
-  it("updates only the position field", () => {
-    const { addNode, updateNodePosition } = useModelStore.getState();
-    const { spaceId } = seedProjectSpace();
-    const nodeId = addNode({ spaceId, name: "Node", position: { x: 0, y: 0, z: 0 } });
+  it("throws if the target orbit doesn't belong to the target space", () => {
+    const { addProject, addSpace, addOrbit, addNode, moveNode } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceA = addSpace({ projectId, name: "A" });
+    const spaceB = addSpace({ projectId, name: "B" });
+    const orbitInA = addOrbit({ spaceId: spaceA, name: "O" });
+    const nodeId = addNode({ spaceId: spaceA, name: "E" });
 
-    updateNodePosition(nodeId, { x: 3, y: 4, z: 5 });
-
-    const node = useModelStore.getState().nodes.get(nodeId);
-    expect(node?.position).toEqual({ x: 3, y: 4, z: 5 });
-    expect(node?.spaceId).toBe(spaceId);
-  });
-
-  it("throws for an unknown node", () => {
-    const { updateNodePosition } = useModelStore.getState();
-    expect(() => updateNodePosition("missing", { x: 0, y: 0, z: 0 })).toThrow();
+    expect(() => moveNode(nodeId, { spaceId: spaceB, orbitId: orbitInA })).toThrow();
   });
 });
 
@@ -521,13 +512,23 @@ describe("delete-impact selectors", () => {
   });
 });
 
+// getWorldPosition/getOrbitWorldOrigin are pure resolution math (walk node.position -> orbit.origin
+// -> space.origin) independent of *how* those fields got set — auto-layout owns them in the real
+// app, but that's irrelevant here. Positions are patched directly via setState (bypassing the
+// add* actions' now-automatic relayout) so each test gets exact, known coordinates to resolve.
 describe("position resolution", () => {
   it("composes node position with orbit and space origins", () => {
     const { addProject, addSpace, addOrbit, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceId = addSpace({ projectId, name: "S", origin: { x: 100, y: 0, z: 0 } });
-    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 10, z: 0 } });
-    const nodeId = addNode({ spaceId, orbitId, name: "E", position: { x: 1, y: 1, z: 1 } });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+    const nodeId = addNode({ spaceId, orbitId, name: "E" });
+
+    useModelStore.setState((state) => ({
+      spaces: new Map(state.spaces).set(spaceId, { ...state.spaces.get(spaceId)!, origin: { x: 100, y: 0, z: 0 } }),
+      orbits: new Map(state.orbits).set(orbitId, { ...state.orbits.get(orbitId)!, origin: { x: 0, y: 10, z: 0 } }),
+      nodes: new Map(state.nodes).set(nodeId, { ...state.nodes.get(nodeId)!, position: { x: 1, y: 1, z: 1 } }),
+    }));
 
     const world = getWorldPosition(useModelStore.getState(), nodeId);
     expect(world).toEqual({ x: 101, y: 11, z: 1 });
@@ -536,8 +537,13 @@ describe("position resolution", () => {
   it("skips the orbit offset when the node has none", () => {
     const { addProject, addSpace, addNode } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceId = addSpace({ projectId, name: "S", origin: { x: 5, y: 0, z: 0 } });
-    const nodeId = addNode({ spaceId, name: "E", position: { x: 1, y: 0, z: 0 } });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const nodeId = addNode({ spaceId, name: "E" });
+
+    useModelStore.setState((state) => ({
+      spaces: new Map(state.spaces).set(spaceId, { ...state.spaces.get(spaceId)!, origin: { x: 5, y: 0, z: 0 } }),
+      nodes: new Map(state.nodes).set(nodeId, { ...state.nodes.get(nodeId)!, position: { x: 1, y: 0, z: 0 } }),
+    }));
 
     expect(getWorldPosition(useModelStore.getState(), nodeId)).toEqual({ x: 6, y: 0, z: 0 });
   });
@@ -545,8 +551,13 @@ describe("position resolution", () => {
   it("resolves an orbit's world origin from its space", () => {
     const { addProject, addSpace, addOrbit } = useModelStore.getState();
     const projectId = addProject({ name: "P" });
-    const spaceId = addSpace({ projectId, name: "S", origin: { x: 10, y: 0, z: 0 } });
-    const orbitId = addOrbit({ spaceId, name: "O", origin: { x: 0, y: 5, z: 0 } });
+    const spaceId = addSpace({ projectId, name: "S" });
+    const orbitId = addOrbit({ spaceId, name: "O" });
+
+    useModelStore.setState((state) => ({
+      spaces: new Map(state.spaces).set(spaceId, { ...state.spaces.get(spaceId)!, origin: { x: 10, y: 0, z: 0 } }),
+      orbits: new Map(state.orbits).set(orbitId, { ...state.orbits.get(orbitId)!, origin: { x: 0, y: 5, z: 0 } }),
+    }));
 
     expect(getOrbitWorldOrigin(useModelStore.getState(), orbitId)).toEqual({ x: 10, y: 5, z: 0 });
   });

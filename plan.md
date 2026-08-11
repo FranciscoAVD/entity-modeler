@@ -147,7 +147,7 @@ Hit detection (raycasting)
 Nodes: raycast against sphere meshes, keyed via userData.nodeId
 Edges: raycast against invisible "hit tube" meshes (cylinder/tube geometry) running alongside each visible curved line — gives a generous, consistent click target regardless of visual line thickness
 Orbits: raycast against a light bounding volume (shell/disc) for orbit-level notes/metadata reveal
-Spaces: raycast against the same kind of light bounding volume as orbits — spaces are now fully part of the reveal/tab flow (this reverses an earlier decision to exclude them; see the closing note below). Drag/move repositioning is unimplemented for every object type so far, not just spaces (tracked under Phase 5)
+Spaces: raycast against the same kind of light bounding volume as orbits — spaces are now fully part of the reveal/tab flow (this reverses an earlier decision to exclude them; see the closing note below). Drag/move repositioning was never built for any object type, and Phase 7 has since settled that it never will be — positions are exclusively auto-layout's responsibility (see Phase 7)
 
 Flow
 
@@ -198,12 +198,12 @@ Billboarded title at curve midpoint, offset perpendicular to the curve
 Distinct styling for same-orbit / cross-orbit / cross-space edges
 Cardinality markers (billboarded) at endpoints
 
-Phase 5 — Camera & interaction (partially done — drag-to-reposition not implemented; updateNodePosition exists in the store but has no UI trigger)
+Phase 5 — Camera & interaction (done — drag-to-reposition was tried, reverted per user feedback, and later ruled out permanently by Phase 7's design: positions are exclusively auto-layout's responsibility, dragging was never rebuilt)
 
 OrbitControls for orbit/pan/zoom
 Unified raycasting across spheres + hit-tubes + orbit bounds → tab-open dispatch
 Animated camera fly-to on tab activation; independent "reset view" control
-Camera-plane-constrained dragging for repositioning nodes (modifier key for depth movement)
+~~Camera-plane-constrained dragging for repositioning nodes (modifier key for depth movement)~~ — dropped; see Phase 7
 
 Phase 6 — Tabs, notes & search UI (done — add/edit/delete note UI was scoped out of the initial pass and delivered later under Phase 8's work instead, see below)
 
@@ -212,16 +212,25 @@ Space info now goes through this same panel (SpaceDetails) rather than staying a
 Search input (tags + titles); results fly the camera like a sidebar-row click, not a full tab-open — see the Search section above
 Add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level — built, but as part of Phase 8's editing-UI pass rather than in this one
 
-Phase 7 — 3D auto-layout (not started — no layout algorithm exists; bounds.ts is a static count-based sizing heuristic, not a layout)
+Phase 7 — 3D auto-layout (done — `client/src/scene/autoLayout.ts`)
 
-Force-directed layout within each orbit first, then orbits arranged within their parent space, then spaces arranged within the project — a layout hierarchy mirroring the data hierarchy
-Shell/sphere constraint option at each tier to keep things navigable
-Manual drag position always overrides auto-layout once set, at node, orbit, or space level
+**Positions are never user-set — the only structural lever a user has is choosing a parent** (creation, or the existing "Move to..." re-parent dialog). This reverses the phase's original framing ("manual drag position always overrides auto-layout once set") — there is no manual position/drag concept at all, so nothing to override. Confirmed with the user before implementation: dragging was explicitly ruled out as a feature, not deferred.
 
-Phase 8 — Editing UI (mostly done — add, rename, delete-with-cascade-confirmation, move-node, and notes/tags/metadata editing UI all exist; node/space/orbit repositioning is the remaining piece, deliberately deferred)
+Hand-rolled, not a library (d3-force-3d was considered and rejected) — a small damped relaxation (repulsion between every pair + a spring pull along relationships + a gentle centering force, position-only, no separate velocity state) built on the existing `client/src/lib/vector3.ts` helpers, run for a fixed number of iterations with damping ramping down so it settles rather than oscillating. Graphs here are small (dozens of objects) and layout is never animated (positions just update, no requestAnimationFrame/live tick loop), so a library's main value — Barnes-Hut repulsion at scale, tuned real-time convergence — didn't justify the dependency or the data-shape bridging it would need (d3-force mutates plain `{x,y,z,vx,vy,vz}` objects; this store uses immutable Vector3 records).
+
+Three cascading tiers, mirroring the data hierarchy, run together as one pass (`autoLayoutProject`) — no manual trigger button, no scoped/partial re-layout, no per-object "locked" flag:
+1. **Nodes within each orbit** — `layoutGroup` over that orbit's nodes, links from intra-orbit relationships, clamped within `orbitRadiusForNodeCount` (bounds.ts's existing count-based sizing formula, extracted into a plain count → radius function so this module can call it without needing a full `ModelState`).
+2. **Each space's direct children together** — every orbit (as one blob, collision radius = its own orbit-tier radius) plus every ungrouped node (as an individual point), links aggregated from relationships between the underlying nodes, clamped within `spaceRadiusForChildren`.
+3. **Spaces within the project** — one point per space (collision radius = its own space-tier radius), links aggregated from cross-space relationships, unconstrained (no parent shell).
+
+Automatic, not manual — `store.ts` calls `autoLayoutProject` at the end of every action that changes topology (`addNode`/`deleteNode`/`moveNode`, `addOrbit`/`deleteOrbit`, `addSpace`/`deleteSpace`, `addRelationship`/`deleteRelationship`/`updateRelationshipEndpoints`); a rename/tag/note/metadata edit never touches it. Does **not** run on project load/hydration — a freshly loaded project (including the seeded demo, with its own hand-placed positions) keeps its saved layout until something actually changes its structure.
+
+This removed what's now dead code: `updateNodePosition` (the store action — there's no manual-positioning concept left for it to serve), the optional `position`/`origin` params on `addNode`/`addOrbit`/`addSpace` (no UI ever passed them; keeping them would've been misleading once auto-layout overwrites them immediately anyway), and `moveNode`'s "preserve world position across the move" re-basing math (moot — `autoLayoutProject` recomputes the position from scratch right after based on the new topology, so re-parenting is now just a field reassignment).
+
+Phase 8 — Editing UI (done — add, rename, delete-with-cascade-confirmation, move-node, and notes/tags/metadata editing UI all exist; node/space/orbit repositioning is no longer planned at all, not merely deferred — see Phase 7 above)
 
 Add/edit/delete projects, spaces, orbits, nodes, relationships, notes/metadata, tags
-Move node between spaces/orbits (re-parenting, re-basing position to the new local origin) — relationships persist automatically per the data model rule
+Move node between spaces/orbits (re-parenting) — relationships persist automatically per the data model rule; position is no longer re-based by moveNode itself, since Phase 7's auto-layout recomputes it from scratch immediately afterward
 Delete space/orbit — cascade confirmation UI, since this is destructive and touches relationships
 
 Notes moved off the small-dialog pattern (done): notes are expected to run long (500-800 words), and the shared `Dialog` primitive every other action uses (CreateDialog, AddRelationshipDialog, MoveNodeDialog, DeleteConfirmDialog) is a fixed 384px with no height cap — fine for a name field or a couple of dropdowns, not for long-form text. Small/quick actions (move, delete, add relationship) stay dialogs; notes get their own docked panel instead. `NotePanel` renders as a sibling of `SidePanel` in `Overlay.tsx`, positioned `absolute inset-y-0 right-80` (flush against `SidePanel`'s left edge, since `SidePanel` is `w-80`) — wider than SidePanel's 320px, at `w-[28rem]` (448px). "Which note is open" moved out of `NoteList`'s local `useState` into `viewStore.ts` (alongside the existing `focusTarget`) as `openNote: { targetType, targetId, note: "new" | Note } | null` plus `openNoteFor`/`closeNote` actions, since `NotePanel` has to be reachable from outside `NoteList`'s own subtree. `NoteDialog.tsx` was retired — its view/edit content (title, date/author, rendered text or edit form, pencil toggle) moved into `NotePanel` with different chrome (its own close button, matching `SidePanel`'s pattern, instead of a modal); note deletion still confirms via the small `DeleteConfirmDialog`, just retargeted to the new panel. Notes also gained Markdown rendering (`react-markdown` + `remark-breaks`, new shared `MarkdownContent.tsx`, custom element styling rather than the `@tailwindcss/typography` plugin) in both the read-only view and — new since the original plan — a Write/Preview toggle inside the edit form itself: one pane at a time, not a WYSIWYG editor and not a side-by-side split (a two-column split was tried in discussion first and rejected as cramped even at 448px; a GitHub-style in-place toggle was picked instead, reusing the same `Textarea` + `MarkdownContent`). The truncated row preview in `NoteList` stays plain/unrendered clamped text — rendering and `line-clamp` don't combine cleanly, and it's a preview, not the view.

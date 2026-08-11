@@ -2,9 +2,10 @@
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
-live — see Phase 9 below. 101 client tests + 6 server tests passing, build/lint clean
-in both packages. Full plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 →
-3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11`.
+live — see Phase 9 below. Phase 7 (3D auto-layout) is also now done — see below. 109
+client tests + 6 server tests passing, build/lint clean in both packages. Full plan
+lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 →
+10 → 11`.
 
 ## What's built
 
@@ -1226,22 +1227,84 @@ schema, only spaces/orbits/nodes were nested.
   6/6 server tests and 101/101 client tests passing (both unchanged in count — this pass
   didn't add or remove test cases, just reshaped what they assert against).
 
+**Phase 7 — 3D auto-layout, built** (`client/src/scene/{autoLayout,bounds,Node}.ts(x)`,
+`client/src/store/store.ts`, `client/src/store/{store,selectors}.test.ts`,
+`client/src/scene/{bounds,cameraFocus}.test.ts`, `plan.md`)
+Closes the last unstarted phase on the roadmap. Planned via several rounds of clarifying
+questions before writing code, since the design space had real forks:
+- **Positions are never user-set — the only structural lever a user has is choosing a
+  parent.** User's own framing, stated directly: "a user should not be able to decide
+  where an object physically sits within a parent. the user can only decide who the
+  parent is." This reverses plan.md's original Phase 7 line ("manual drag position
+  always overrides auto-layout") — there's no manual position concept left to override.
+  Confirmed explicitly: node/space/orbit repositioning-via-drag (Phase 8's last
+  remaining item, and Phase 5's reverted drag attempt) is not coming back, ever — the
+  only "repositioning" is re-parenting via the existing `MoveNodeDialog` ("Move to...").
+- **Hand-rolled, not a library** — d3-force-3d was discussed and picked first, then
+  reconsidered once "trigger-only, not continuous/animated" was clarified: d3-force's
+  main value (Barnes-Hut repulsion at scale, tuned real-time damping) doesn't matter for
+  small graphs recomputed once per structural change with no animation. Landed on a
+  small damped relaxation (repulsion + spring-along-relationships + centering, built on
+  the existing `client/src/lib/vector3.ts` helpers) instead — avoids the dependency and
+  the data-shape bridging a d3-force integration would need (it mutates plain
+  `{x,y,z,vx,vy,vz}` objects; this store uses immutable `Vector3` records).
+- **Automatic, not a button, no scoped/partial re-layout, no "locked position" flag** —
+  all three were explicitly ruled out in favor of the simplest option consistent with
+  "the user cannot decide position": `store.ts` calls `autoLayoutProject` at the end of
+  every action that changes topology, whole-project each time.
+- New `client/src/scene/autoLayout.ts`: `layoutGroup` (the reusable core primitive —
+  settle a list of entities + weighted links, optionally clamped within a container
+  radius) and `autoLayoutProject` (orchestrates three cascading tiers: nodes within each
+  orbit; each space's orbits-as-blobs + ungrouped-nodes-as-points together; spaces
+  within the project, unconstrained). Deterministic golden-angle-spiral starting
+  positions (not `Math.random()`) so layout is reproducible for the same input — matters
+  for testing, and avoids the "two entities start exactly coincident, repulsion has no
+  defined direction" degenerate case.
+- **Architectural care taken to keep the data layer separate from the renderer** (plan.md
+  decision #5): `autoLayout.ts` needed the same node-sphere radius rendering uses
+  (`NODE_RADIUS`, previously defined in `Node.tsx`, a React/R3F component) to keep
+  physics and visuals consistent — importing it directly would have pulled a scene
+  component into `store.ts`'s dependency graph. Moved `NODE_RADIUS` into `bounds.ts`
+  (already React-free, already the "sizing" home for `orbitRadiusForNodeCount`/
+  `spaceRadiusForChildren`, split out from the existing `computeOrbitRadius`/
+  `computeSpaceRadius` as plain count → radius functions so `autoLayout.ts` doesn't need
+  a full `ModelState` just to re-derive a count it already has); `Node.tsx` now imports
+  and re-exports it, so `RelationshipEdge.tsx`'s existing import path keeps working
+  unchanged.
+- **Removed as genuinely dead code, not kept "just in case"**: `updateNodePosition`
+  (store action) — no manual-positioning concept left for it to serve; the optional
+  `position`/`origin` params on `addNode`/`addOrbit`/`addSpace` — confirmed via grep
+  that no UI code ever passed them, only test fixtures did, so nothing user-facing
+  changed; `moveNode`'s "preserve world position across the move" re-basing math — moot,
+  since `autoLayoutProject` recomputes the position from scratch immediately after based
+  on the new topology, so re-parenting is now just a field reassignment.
+- **Bigger test-rewrite footprint than initially scoped**: since every `addSpace`/
+  `addOrbit`/`addNode`/`addRelationship`/`moveNode`/delete-* call now triggers a
+  relayout, tests that previously hand-placed exact coordinates via `origin`/`position`
+  params (to test `getWorldPosition`/`getOrbitWorldOrigin`/camera-focus math, or to
+  prove `bounds.ts`'s radius formulas ignore position) broke — not just in
+  `store.test.ts` as originally estimated, but also `cameraFocus.test.ts` and
+  `bounds.test.ts`. Fixed by patching state directly via `useModelStore.setState(...)`
+  after structural setup (which bypasses the action layer entirely, so no relayout
+  fires) wherever a test needs exact, known coordinates — arguably a cleaner test
+  pattern anyway, since it no longer conflates "does this pure resolution/rendering
+  logic work" with "did the action layer happen to produce this exact position."
+- New `autoLayout.test.ts`: structural-property tests, not exact-coordinate assertions
+  (brittle against tuning changes) — a single entity centers itself, nothing exceeds its
+  container's radius, connected entities end up closer than unconnected ones,
+  unconnected entities don't collapse onto the same point, objects outside the given
+  project are left untouched, orbits with a relationship between their nodes end up
+  closer together than orbits with none.
+- Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warnings),
+  109 client tests passing (up from 101 — 9 new in `autoLayout.test.ts`, plus a handful
+  of rewritten/consolidated tests elsewhere netting out close to even). No browser
+  verification done this session (per standing preference).
+- `plan.md` rewritten throughout: Phase 7 (now done), Phase 5 and Phase 8's stale
+  "drag/repositioning not implemented yet" framing (now "ruled out permanently, not
+  deferred"), the hit-detection section's drag-repositioning note, and the Phase 8
+  move-node bullet (no longer re-bases position itself).
+
 ## TODO — remaining phases
-
-**Phase 7 — 3D auto-layout**
-- Force-directed layout: within each orbit first, then orbits within their space, then
-  spaces within the project (mirrors the data hierarchy)
-- Optional shell/sphere constraint per tier
-- Manual drag position (once dragging/editing exists again) always overrides
-  auto-layout for whatever was moved
-
-**Phase 8 — Editing UI** (delete, move, and notes/tags/metadata editing all done, see
-above; still TODO:)
-- Node/space/orbit *repositioning*, this time scoped deliberately (the earlier drag
-  implementation was removed, not replaced) — the last piece of Phase 8
-- No origin field on space creation (see the Phase 8 part 1 entry above) — worth
-  revisiting alongside repositioning, since right now a moved node only visibly
-  relocates if its old and new parent happen to have different origins
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
 below; export still TODO)
