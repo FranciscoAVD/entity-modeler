@@ -19,15 +19,17 @@ import { useViewStore } from "./viewStore";
 export function Header({
   projectId,
   onProjectChange,
+  onCreateProject,
   className,
 }: {
   projectId: string;
   onProjectChange: (projectId: string) => void;
+  onCreateProject: (name: string) => void;
   className?: string;
 }) {
   const projects = useModelStore(useShallow((state) => allProjects(state)));
-  const addProject = useModelStore((state) => state.addProject);
   const requestResetView = useViewStore((state) => state.requestResetView);
+  const saveStatus = useViewStore((state) => state.saveStatus);
   const [creatingProject, setCreatingProject] = useState(false);
 
   return (
@@ -61,6 +63,19 @@ export function Header({
 
       <TabBar />
 
+      {saveStatus !== "idle" && (
+        <span
+          className={cn(
+            "text-sm",
+            saveStatus === "error" ? "text-destructive" : "text-muted-foreground",
+          )}
+        >
+          {saveStatus === "saving" && "Saving…"}
+          {saveStatus === "saved" && "Saved"}
+          {saveStatus === "error" && "Save failed"}
+        </span>
+      )}
+
       <Button onClick={requestResetView}>Reset view</Button>
 
       <CreateDialog
@@ -68,7 +83,7 @@ export function Header({
         onOpenChange={setCreatingProject}
         title="New project"
         placeholder="Project name"
-        onSubmit={(name) => onProjectChange(addProject({ name }))}
+        onSubmit={onCreateProject}
       />
     </div>
   );

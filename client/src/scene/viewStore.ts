@@ -40,6 +40,12 @@ interface ViewState {
   openNote: OpenNote | null;
   openNoteFor(targetType: NoteTargetType, targetId: string, note: "new" | Note): void;
   closeNote(): void;
+
+  // Reflects the Layer 5 autosave subscription (store/persistence.ts) — surfaced in the Header
+  // as a small "Saving…"/"Saved" indicator. Not model data, so it lives here rather than the
+  // model store.
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  setSaveStatus(status: ViewState["saveStatus"]): void;
 }
 
 function toggle(set: Set<string>, id: string): Set<string> {
@@ -82,5 +88,11 @@ export const useViewStore = create<ViewState>()((set, get) => ({
 
   closeNote() {
     set({ openNote: null });
+  },
+
+  saveStatus: "idle",
+
+  setSaveStatus(status) {
+    set({ saveStatus: status });
   },
 }));

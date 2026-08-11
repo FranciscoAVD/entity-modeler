@@ -25,6 +25,7 @@
     "react-markdown": "^10.1.0",
     "remark-breaks": "^4.0.0",
     "shadcn": "^4.16.0",
+    "shared": "workspace:*",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
     "three": "^0.185.1",

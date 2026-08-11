@@ -18,6 +18,9 @@ lerna-debug.log*
 .env
 .env.local
 
+# Local SQLite database (server/src/db/connection.ts)
+server/data/
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json

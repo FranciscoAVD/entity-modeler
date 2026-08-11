@@ -1,5 +1,5 @@
 import { ArrowRight, ArrowRightLeft, ChevronRight, EyeOff, Move, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { Button } from "@/components/ui/button";
 import {
@@ -120,9 +120,8 @@ export function SidebarTree({
   return (
     <div className="space-y-2 text-sm">
       {spaces.map((space, idx) => (
-        <>
+        <Fragment key={space.id}>
           <SpaceRow
-            key={space.id}
             space={space}
             onRequestCreate={onRequestCreate}
             onRequestRename={setRenameTarget}
@@ -133,7 +132,7 @@ export function SidebarTree({
           {idx !== spaces.length - 1 && (
             <div className="my-4 mx-auto w-[calc(100%-1rem)] h-0.5 bg-border/50" />
           )}
-        </>
+        </Fragment>
       ))}
       <CreateDialog
         open={renameTarget !== null}

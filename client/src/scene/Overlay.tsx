@@ -6,15 +6,18 @@ import { SidePanel } from "./SidePanel";
 export function Overlay({
   projectId,
   onProjectChange,
+  onCreateProject,
 }: {
   projectId: string;
   onProjectChange: (projectId: string) => void;
+  onCreateProject: (name: string) => void;
 }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col">
       <Header
         projectId={projectId}
         onProjectChange={onProjectChange}
+        onCreateProject={onCreateProject}
         className="pointer-events-auto h-14 shrink-0"
       />
       <div className="relative flex flex-1 overflow-hidden">

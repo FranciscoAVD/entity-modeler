@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { subscribeWithSelector } from "zustand/middleware";
+import type { ProjectDetail } from "shared";
 import { subtract } from "@/lib/vector3";
 import { getOrbitWorldOrigin, getWorldPosition, projectIdForNode, spacesInProject } from "./selectors";
 import type {
@@ -31,6 +33,7 @@ export interface ModelState {
 }
 
 export interface ModelActions {
+  hydrateProject(detail: ProjectDetail): void;
   addProject(input: { name: string; description?: string }): string;
   addSpace(input: {
     projectId: string;
@@ -207,7 +210,11 @@ function notesPatch(
   }
 }
 
-export const useModelStore = create<ModelState & ModelActions>()((set, get) => ({
+// subscribeWithSelector so Layer 5's autosave (persistence.ts) can subscribe to just the five
+// data Maps with a shallow-equality check, rather than firing on every store change — openTab/
+// setActiveTab/clearActiveTab touch openTabs/activeTabId, session/view state that's never
+// persisted and must not trigger a save.
+export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSelector((set, get) => ({
   projects: new Map(),
   spaces: new Map(),
   orbits: new Map(),
@@ -216,6 +223,56 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   tags: new Map(),
   openTabs: [],
   activeTabId: null,
+
+  // Populates the five data Maps for one project from a server-fetched nested tree (the inverse
+  // of serialize.ts's serializeProject) — merges into existing state by id, rather than
+  // replacing it outright, so switching projects accumulates data instead of evicting whatever
+  // was already loaded (plan.md: "once fetched, stays in the store"). Doesn't touch
+  // openTabs/activeTabId — those are session/view state, not part of what the server persists.
+  hydrateProject(detail) {
+    const state = get();
+
+    const projects = new Map(state.projects);
+    projects.set(detail.project.id, detail.project);
+
+    const tags = new Map(state.tags);
+    for (const tag of detail.tags) tags.set(tag.id, tag);
+
+    const spaces = new Map(state.spaces);
+    const orbits = new Map(state.orbits);
+    const nodes = new Map(state.nodes);
+    for (const s of detail.spaces) {
+      spaces.set(s.id, {
+        id: s.id,
+        projectId: s.projectId,
+        name: s.name,
+        label: s.label,
+        origin: s.origin,
+        tagIds: s.tagIds,
+        notes: s.notes,
+        metadata: s.metadata,
+      });
+      for (const o of s.orbits) {
+        orbits.set(o.id, {
+          id: o.id,
+          spaceId: o.spaceId,
+          name: o.name,
+          label: o.label,
+          origin: o.origin,
+          tagIds: o.tagIds,
+          notes: o.notes,
+          metadata: o.metadata,
+        });
+        for (const n of o.nodes) nodes.set(n.id, n);
+      }
+      for (const n of s.ungroupedNodes) nodes.set(n.id, n);
+    }
+
+    const relationships = new Map(state.relationships);
+    for (const r of detail.relationships) relationships.set(r.id, r);
+
+    set({ projects, spaces, orbits, nodes, relationships, tags });
+  },
 
   addProject({ name, description }) {
     const id = crypto.randomUUID();
@@ -730,4 +787,4 @@ export const useModelStore = create<ModelState & ModelActions>()((set, get) => (
   clearActiveTab() {
     set({ activeTabId: null });
   },
-}));
+})));

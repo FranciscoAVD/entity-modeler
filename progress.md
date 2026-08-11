@@ -1,9 +1,10 @@
 # Progress recap
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
-`server` Bun+Hono, unused so far). 102 tests passing, build/lint clean. Full
-plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 →
-9 → 10 → 11`.
+`server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
+live — see Phase 9 below. 102 client tests + 5 server tests passing, build/lint clean
+in both packages. Full plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 →
+3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11`.
 
 ## What's built
 
@@ -858,6 +859,128 @@ called the concept.
   passing, no test assertions needed updating beyond the mechanical rename itself. No
   browser verification done — purely a rename, no behavioral change.
 
+**Phase 9 — Server-backed persistence** (plan.md's Phase 9, now implemented —
+`shared/` (new package), `server/src/db/*`, `server/src/routes/projects.ts`,
+`client/src/store/{api,serialize,persistence}.ts`, `client/src/store/store.ts`,
+`client/src/App.tsx`, `client/src/scene/{Header,Overlay,SidebarTree}.tsx`,
+`client/src/store/seed.ts` (deleted), `plan.md`)
+Planned as an explicit layered plan (`/home/victoriano/.claude/plans/moonlit-knitting-crayon.md`)
+before writing any code, with two architectural forks resolved with the user up front —
+both material enough to change the shape of the whole plan, so worth restating here:
+(1) write-sync is **debounced full-project autosave**, not ~30 individually-designed
+per-mutation REST endpoints — the store stays the sole source of validation/cascade
+truth, the server just persists whatever complete snapshot it's handed; (2) demo
+seed data **moves server-side** (seeded into SQLite once, on first boot, if empty) —
+`client/src/store/seed.ts` is gone, the client never fabricates data itself anymore.
+Built and verified in six layers, each checked before the next started (typecheck +
+tests at every layer; two `curl`-based server checkpoints before any client code
+existed; full browser verification — headless Chromium via Playwright, load → switch
+→ create → edit → reload — at the end, not just unit tests).
+- **Layer 0 — `shared` package.** New workspace package (`shared/src/schemas.ts`),
+  zero DB dependency (only `zod`), added to root `package.json`'s workspaces.
+  Hand-written schemas mirror `client/src/store/types.ts` 1:1 — `Vector3Schema`,
+  `NoteSchema`, `TagSchema`, `SpaceSchema`, `OrbitSchema`, `NodeSchema`,
+  `RelationshipSchema`, `ProjectSummarySchema` — plus a composed `ProjectDetailSchema`
+  (the nested tree: project → spaces → (orbits → nodes) + ungroupedNodes, with
+  relationships/tags as flat siblings) used for both the `GET` response and the `PUT`
+  request body, authored once for both directions. Types are `z.infer`'d, not
+  hand-duplicated, so client and server can't drift apart.
+- **Layer 1 — server DB layer.** `drizzle-orm`/`drizzle-kit` added; `db/schema.ts`
+  defines one Drizzle table per type plus four join tables for the `tagIds`
+  many-to-many (`space_tags`/`orbit_tags`/`node_tags`/`relationship_tags`) — a
+  many-to-many can't be a plain array column in SQL the way it is in the client's
+  normalized store. `notes` is one polymorphic table (`target_type` + `target_id`),
+  matching decision #6's "same shape, same rendering path at every level" rather than
+  four separate note tables. Every FK uses `onDelete: cascade` (or `set null` for a
+  node's `orbitId`, mirroring `deleteOrbit`'s reassign-not-delete behavior) —
+  explicitly a referential-integrity safety net only, not where cascade business
+  logic lives (that stays 100% in `store.ts`, already tested — the server never
+  re-implements it). `db/connection.ts` wires `bun:sqlite` + `drizzle()` and runs
+  migrations (drizzle-kit-generated, checked into `server/drizzle/`) on every boot, so
+  `bun run dev`/`start` stays one command rather than a separate manual migrate step.
+  `db/seed.ts` ports `seed.ts`'s old demo content to direct Drizzle inserts, seeding
+  once if `projects` is empty. DB file at `server/data/app.db`, gitignored.
+- **Layer 2 — server read API.** `db/reads.ts`'s `loadProjectList`/`loadProjectDetail`
+  reshape flat rows into the nested tree (grouping join-table rows back into
+  `tagIds` arrays, notes by `targetId`, nodes by `orbitId`/`spaceId`), validated
+  through `ProjectDetailSchema` before responding — catches a reshape bug at the
+  boundary rather than shipping a malformed response. `GET /projects`, `GET
+  /projects/:id` (404 if missing). **Checkpoint A**: curl-verified against a running
+  `bun run dev:server` before any write code existed.
+- **Layer 3 — server write API.** `db/writes.ts`'s `upsertProject` does one Drizzle
+  transaction: gather the *old* target ids for this project first (notes have no FK
+  to their target, so a cascade delete won't clean them up — has to be explicit),
+  delete those notes, delete the `projects` row (cascades everything else per the
+  Layer 1 FK rules), then bulk-insert the complete new snapshot. `PUT /projects/:id`
+  is upsert (creates if missing, replaces if present — one route covers both "save a
+  new project" and "autosave an edit"); `DELETE /projects/:id` exists too. **Checkpoint
+  B**: full CRUD curl-verified (including a 400 on an invalid payload showing real Zod
+  issue paths, and a row-count check proving a round-trip PUT doesn't duplicate
+  anything) before touching the client. A proper test suite followed
+  (`db/persistence.test.ts`, 5 tests against an isolated in-memory DB via
+  `DB_FILE=:memory:`, including a deep `.toEqual` round-trip and a
+  replace-not-merge check).
+- **Layer 4 — client read integration.** `store.ts` gained one new action,
+  `hydrateProject(detail)`, bulk-populating the five data Maps from a fetched
+  `ProjectDetail` — merges by id rather than replacing, so switching projects
+  accumulates data rather than evicting what's already loaded (plan.md: "once
+  fetched, stays in the store"). `store/serialize.ts`'s `serializeProject` is the
+  inverse, walking the flat Maps back into the nested tree via the *existing*
+  selectors (`spacesInProject`, `nodesInOrbit`, `ungroupedNodesInSpace`,
+  `tagsInProject`, etc.) — no new query logic. `App.tsx`'s bootstrap rewritten from a
+  synchronous `useState(() => seedDemoProject())` to an async flow: fetch the project
+  list, load+hydrate the first one, loading/empty/error states in between. A
+  `loadedProjectIds` ref (not state — never needs to trigger a re-render) tracks
+  what's already hydrated so re-selecting a project in the Header's switcher doesn't
+  re-fetch it. `Header.tsx`'s "New project" flow changed from `addProject` +
+  `onProjectChange` to a new `onCreateProject` prop (threaded through
+  `Overlay.tsx`) that does `addProject` then an *immediate*, non-debounced `PUT` —
+  without it, closing the tab right after creating a project would lose it entirely,
+  since the Layer 5 autosave hasn't had its first debounce cycle yet.
+- **Layer 5 — client write integration (autosave).** `store.ts`'s `create<...>()`
+  gained zustand's `subscribeWithSelector` middleware. New `store/persistence.ts`'s
+  `useAutosave(projectId)` subscribes to just the five data Maps with a `shallow`
+  equality check — critical, since `openTabs`/`activeTabId` live in the same store
+  and must *not* trigger a save (view/session state, never persisted). ~1s after the
+  last change, `flush()` serializes and `saveProject`s; a pending flush is run (not
+  dropped) on project-switch or unmount rather than silently losing an edit still
+  waiting on the debounce. A small "Saving…"/"Saved"/"Save failed" indicator was
+  added to `Header.tsx`, backed by a new `saveStatus` field on `viewStore.ts` (view
+  state, not model data — same reasoning as `focusTarget`/`openNote` already living
+  there). **Checkpoint C**: full browser round-trip — rename a node via the sidebar,
+  watch the indicator, reload the page in a fresh browser context, confirm the rename
+  survived — plus an independent `curl` check (a separate process, after the browser
+  closed) proving it's real server-side durability, not just optimistic client state.
+- **Bug found and fixed along the way, unrelated to persistence itself**: browser
+  testing (Playwright driving headless Chromium — no `chromium-cli` available in this
+  environment, so `playwright`'s `chromium` module was used directly, matching the
+  `run` skill's documented fallback) surfaced a React console warning —
+  `SidebarTree.tsx`'s space list used a bare `<>...</>` fragment as the element
+  returned from `.map()`, with `key` mistakenly placed on the child `SpaceRow`
+  instead of the fragment itself (a bare fragment can't take props at all). Silent
+  until this session, since no prior session had actually opened devtools console —
+  every previous UI change was verified structurally (typecheck/build/tests) but "no
+  browser verification done this session" is a recurring note throughout this file.
+  Fixed with `Fragment` (from `"react"`) + `key={space.id}`.
+- Verified end-to-end: `tsc`/`typecheck` clean in all three packages; `vite build`
+  clean; `oxlint` clean (same 4 pre-existing fast-refresh warnings, unrelated); all
+  102 existing client tests pass unmodified (no store business logic changed — the
+  whole point of the autosave-over-per-mutation-endpoints decision); 5 new server
+  tests pass. Full manual browser verification as described above, zero console
+  errors in the final run.
+- `plan.md`'s Phase 9 section rewritten to match what's actually built (was "not
+  started — architecture decided, no implementation yet"); this file's Phase 8 TODO
+  bullet also picked up a small stale-terminology fix (still said "Entity" from before
+  last session's rename — missed then since that pass deliberately left this file's
+  *historical* entries alone, but the TODO section is forward-looking, not history, so
+  it should have followed).
+- **Not built this pass, explicitly deferred**: flatten-to-orthographic export (PNG/
+  PDF) — separate Phase 9 line item; `serializeProject` gives it a head start later.
+  Auth — decision #14 (single-user) still holds. Retry/offline-queue robustness for a
+  failed autosave — logs to console, no retry/backoff, matching "single-user,
+  low-stakes local tool" scope. A delete-project UI — the action and route both exist
+  and work, just no UI entry point (wasn't one before this pass either).
+
 ## TODO — remaining phases
 
 **Phase 7 — 3D auto-layout**
@@ -869,21 +992,24 @@ called the concept.
 
 **Phase 8 — Editing UI** (delete, move, and notes/tags/metadata editing all done, see
 above; still TODO:)
-- Entity/space/orbit *repositioning*, this time scoped deliberately (the earlier drag
+- Node/space/orbit *repositioning*, this time scoped deliberately (the earlier drag
   implementation was removed, not replaced) — the last piece of Phase 8
 - No origin field on space creation (see the Phase 8 part 1 entry above) — worth
-  revisiting alongside repositioning, since right now a moved entity only visibly
+  revisiting alongside repositioning, since right now a moved node only visibly
   relocates if its old and new parent happen to have different origins
 
-**Phase 9 — Persistence & export**
-- Decided: persistence is server-backed — SQLite via Bun's native driver
-  (`bun:sqlite`) accessed through drizzle-orm, living in the `server` package
-  (currently an unused Hono skeleton). Not started; no schema, no drizzle config,
-  no migrations yet.
-- JSON serialize/deserialize (all note levels, metadata, tags) — still needed as the
-  wire format even with a DB backing it, and/or for import/export independent of the
-  server
-- Flatten-to-orthographic export (PNG/PDF) at project/space/orbit scope
+**Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
+below; export still TODO)
+- Flatten-to-orthographic export (PNG/PDF) at project/space/orbit scope — the one
+  remaining Phase 9 item; `client/src/store/serialize.ts`'s `serializeProject` (built
+  for autosave) already knows how to flatten one project's full data, a head start
+  for whatever export format ends up needed
+- A delete-project UI — `deleteProject` (store) and `DELETE /projects/:id` (server)
+  both exist and work, just have no UI entry point (project deletion had none before
+  this pass either, so this isn't a regression, just a standing gap)
+- Retry/offline-queue robustness for a failed autosave `PUT` — currently just logs to
+  console, no retry/backoff, deliberately matching "single-user, low-stakes local
+  tool" scope (plan.md decision #14)
 
 **Phase 10 — Performance polish**
 - LOD for text/geometry at distance, frustum culling
