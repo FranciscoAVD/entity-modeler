@@ -2,7 +2,7 @@
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
-live — see Phase 9 below. 100 client tests + 5 server tests passing, build/lint clean
+live — see Phase 9 below. 101 client tests + 5 server tests passing, build/lint clean
 in both packages. Full plan lives in [plan.md](plan.md); build order is `0 → 1 → 2 →
 3 → 5 → 4 → 6 → 7 → 8 → 9 → 10 → 11`.
 
@@ -1079,6 +1079,45 @@ its *old* behavior — fly the camera **and** open the side panel (`setActiveTab
   unrelated); 100 tests passing (no test coverage added for this UI itself, consistent
   with how the rest of `SidebarSearch`/`InfoPanel` are — presentational, not unit-tested).
   No browser verification done this session (per standing preference).
+
+**Bug fix: relationships now appear in TagObjectsDialog** (`client/src/store/selectors.ts`,
+`client/src/scene/TagObjectsDialog.tsx`, `client/src/store/store.test.ts`, `plan.md`)
+User report: clicking the seeded "vpn" tag in search (a Tags result) showed "Nothing
+tagged," even though the demo project's cross-space relationship (Ungrouped Node → Remote
+Node) visibly carries that exact tag in its own info panel. Root cause: `objectsForTag`
+only ever scanned spaces/orbits/nodes — relationships were excluded by a deliberate scope
+cut from the tag-search redesign two sessions ago (plan.md decision #11: "no name field to
+show as a result, no sidebar row"). Since "vpn" happens to be tagged only on the
+relationship itself in the seed data, not on either endpoint node, the dialog had nothing
+to show.
+- That original exclusion reasoning no longer fully applied — relationships already have a
+  synthesizable label (endpoint-based, the same fallback `tabLabel` uses for the
+  recently-viewed list added earlier this session), `focusOn` already accepts
+  `"relationship"` as a `FocusableType`, and `isRelationshipVisible` already existed in
+  `edgeVisibility.ts` for edge rendering. Nothing was actually missing to support this —
+  it just hadn't been wired into this one dialog.
+- `objectsForTag` extended to also walk `state.relationships`, pushing a `{ type:
+  "relationship", name: "Source → Target" }` result; `SearchResult.type` widened to
+  include `"relationship"` (verified this doesn't break the two places that switch
+  exhaustively over it — `SidebarSearch.tsx`'s `ResultIcon` already handled it via its
+  `Tab["type"]` union half, `TagObjectsDialog.tsx`'s `ObjectIcon` gained a new case using
+  the `RelationshipIcon` built for the recently-viewed feature).
+- `TagObjectsDialog.tsx`'s `selectObject` gained an `isRelationshipVisible` branch
+  alongside the existing space/orbit/node visibility gate, so a relationship whose
+  endpoint is currently hidden won't attempt to focus the camera at it, consistent with
+  every other result type in this dialog.
+- Still explicitly out of scope, unchanged: relationships still don't participate in
+  *title* search and still have no sidebar row of their own — only the tag-carrier lookup
+  gained them, since that's the one place a missing relationship reads as a broken tag
+  rather than an intentionally narrower search surface.
+- New test: `objectsForTag also resolves relationships, labeled by their endpoints` in
+  `store.test.ts`. `plan.md` decision #11 and the search-architecture section updated to
+  match (the old "relationships still aren't part of tag search" line was flatly wrong
+  once this landed).
+- Verified: `tsc -b && vite build` clean; `oxlint` clean (same 4 pre-existing warnings);
+  101 tests passing (up from 100). No browser verification done this session (per standing
+  preference) — worth clicking the "vpn" tag in the demo project to confirm the
+  relationship now shows up and focuses correctly.
 
 ## TODO — remaining phases
 

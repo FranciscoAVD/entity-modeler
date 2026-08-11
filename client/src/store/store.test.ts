@@ -701,6 +701,20 @@ describe("tag registry selectors", () => {
     const results = objectsForTag(state, tagId);
     expect(results.map((r) => r.name).sort()).toEqual(["Edge", "Prod", "Server"]);
   });
+
+  it("objectsForTag also resolves relationships, labeled by their endpoints", () => {
+    const { addProject, addSpace, addNode, addRelationship } = useModelStore.getState();
+    const projectId = addProject({ name: "P" });
+    const spaceId = addSpace({ projectId, name: "Space" });
+    const a = addNode({ spaceId, name: "A" });
+    const b = addNode({ spaceId, name: "B" });
+    const relId = addRelationship({ sourceId: a, targetId: b, cardinality: "1:1", tags: ["vpn"] });
+
+    const state = useModelStore.getState();
+    const tagId = state.relationships.get(relId)!.tagIds[0];
+    const results = objectsForTag(state, tagId);
+    expect(results).toEqual([{ id: relId, type: "relationship", name: "A → B" }]);
+  });
 });
 
 describe("tabLabel", () => {

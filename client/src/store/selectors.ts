@@ -142,7 +142,7 @@ export function nodeDeleteImpact(state: ModelState, nodeId: string): { relations
 
 export interface SearchResult {
   id: string;
-  type: "space" | "orbit" | "node" | "tag";
+  type: "space" | "orbit" | "node" | "tag" | "relationship";
   name: string;
 }
 
@@ -194,11 +194,12 @@ export function searchTags(state: Pick<ModelState, "tags">, query: string, proje
   return results;
 }
 
-// Every space/orbit/node carrying a specific tag id, resolved to a displayable/focusable shape
-// — backs the "what does this tag apply to" dialog opened from a Tags search result. Relationships
-// aren't included — no name field to show, no sidebar row (plan.md decision #11).
+// Every space/orbit/node/relationship carrying a specific tag id, resolved to a
+// displayable/focusable shape — backs the "what does this tag apply to" dialog opened from a Tags
+// search result. Relationships have no `name` field (why they're excluded from *title* search
+// above), so they're labeled by their endpoints instead, same fallback tabLabel uses.
 export function objectsForTag(
-  state: Pick<ModelState, "spaces" | "orbits" | "nodes">,
+  state: Pick<ModelState, "spaces" | "orbits" | "nodes" | "relationships">,
   tagId: string,
 ): SearchResult[] {
   const results: SearchResult[] = [];
@@ -210,6 +211,12 @@ export function objectsForTag(
   }
   for (const e of state.nodes.values()) {
     if (e.tagIds.includes(tagId)) results.push({ id: e.id, type: "node", name: e.name });
+  }
+  for (const r of state.relationships.values()) {
+    if (!r.tagIds.includes(tagId)) continue;
+    const source = state.nodes.get(r.sourceId)?.name ?? "?";
+    const target = state.nodes.get(r.targetId)?.name ?? "?";
+    results.push({ id: r.id, type: "relationship", name: `${source} → ${target}` });
   }
   return results;
 }

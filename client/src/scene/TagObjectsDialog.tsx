@@ -2,7 +2,8 @@ import { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { objectsForTag, type SearchResult } from "@/store/selectors";
 import { useModelStore } from "@/store/store";
-import { NodeIcon, OrbitIcon, SpaceIcon } from "./SidebarTypeIcons";
+import { isRelationshipVisible } from "./edgeVisibility";
+import { NodeIcon, OrbitIcon, RelationshipIcon, SpaceIcon } from "./SidebarTypeIcons";
 import { isNodeVisible, isOrbitVisible, isSpaceVisible } from "./visibility";
 import { useViewStore } from "./viewStore";
 
@@ -16,6 +17,8 @@ function ObjectIcon({ type }: { type: SearchResult["type"] }) {
       return <OrbitIcon className={OBJECT_ICON_CLASS} />;
     case "node":
       return <NodeIcon className={OBJECT_ICON_CLASS} />;
+    case "relationship":
+      return <RelationshipIcon className={OBJECT_ICON_CLASS} />;
     case "tag":
       return null;
   }
@@ -38,6 +41,7 @@ export function TagObjectsDialog({
   const spaces = useModelStore((state) => state.spaces);
   const orbits = useModelStore((state) => state.orbits);
   const nodes = useModelStore((state) => state.nodes);
+  const relationships = useModelStore((state) => state.relationships);
   const focusOn = useViewStore((state) => state.focusOn);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
@@ -46,8 +50,8 @@ export function TagObjectsDialog({
   // the raw (stable) Maps rather than as a Zustand selector, so there's no getSnapshot-instability
   // risk (see the fix in TagBrowserDialog's history for the same class of bug via tagsInProject).
   const objects = useMemo(
-    () => (tag ? objectsForTag({ spaces, orbits, nodes }, tag.id) : []),
-    [tag, spaces, orbits, nodes],
+    () => (tag ? objectsForTag({ spaces, orbits, nodes, relationships }, tag.id) : []),
+    [tag, spaces, orbits, nodes, relationships],
   );
 
   const selectObject = (result: SearchResult) => {
@@ -58,7 +62,9 @@ export function TagObjectsDialog({
         ? isSpaceVisible(hiddenSpaceIds, result.id)
         : result.type === "orbit"
           ? isOrbitVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
-          : isNodeVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
+          : result.type === "relationship"
+            ? isRelationshipVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
+            : isNodeVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
     if (!visible) return;
     focusOn(result.id, result.type);
     onOpenChange(false);
