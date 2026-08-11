@@ -1,33 +1,28 @@
 import type { ProjectDetail } from "shared";
 import {
-  nodesInOrbit,
-  orbitsInSpace,
+  nodesInProject,
+  orbitsInProject,
   relationshipsInProject,
   spacesInProject,
   tagsInProject,
-  ungroupedNodesInSpace,
 } from "./selectors";
 import type { ModelState } from "./store";
 
-// The inverse of store.ts's hydrateProject — walks the flat Maps (via the same "children of X"
-// selectors the rest of the app already uses, no new query logic) back into the nested tree shape
-// the server expects for a PUT /projects/:id upsert. Used by the Layer 5 autosave subscription.
+// The inverse of store.ts's hydrateProject — pulls each of the five flat Maps down to just this
+// project's own records (via the same "in project" selectors the rest of the app already uses, no
+// new query logic) for a PUT /projects/:id upsert. Flat, not nested — the wire shape mirrors how
+// both the client's store and the server's SQL schema already store this data (see
+// ProjectDetailSchema's own comment in shared/schemas.ts). Used by the Layer 5 autosave
+// subscription.
 export function serializeProject(state: ModelState, projectId: string): ProjectDetail {
   const project = state.projects.get(projectId);
   if (!project) throw new Error(`Project not found: ${projectId}`);
 
-  const spaces = spacesInProject(state, projectId).map((space) => ({
-    ...space,
-    orbits: orbitsInSpace(state, space.id).map((orbit) => ({
-      ...orbit,
-      nodes: nodesInOrbit(state, orbit.id),
-    })),
-    ungroupedNodes: ungroupedNodesInSpace(state, space.id),
-  }));
-
   return {
     project,
-    spaces,
+    spaces: spacesInProject(state, projectId),
+    orbits: orbitsInProject(state, projectId),
+    nodes: nodesInProject(state, projectId),
     relationships: relationshipsInProject(state, projectId),
     tags: tagsInProject(state, projectId),
   };

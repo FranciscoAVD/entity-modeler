@@ -1,5 +1,5 @@
 import { asc, eq, inArray, or } from "drizzle-orm";
-import type { Note, OrbitDetail, ProjectDetail, ProjectSummary, SpaceDetail, Tag } from "shared";
+import type { Node, Note, Orbit, ProjectDetail, ProjectSummary, Space, Tag } from "shared";
 import { ProjectDetailSchema } from "shared";
 import { db } from "./connection";
 import {
@@ -27,10 +27,11 @@ export async function loadProjectList(): Promise<ProjectSummary[]> {
   return rows.map((p) => ({ id: p.id, name: p.name, description: p.description ?? undefined }));
 }
 
-// Reassembles the nested tree (project -> spaces -> (orbits -> nodes) + ungroupedNodes, with
-// relationships/tags as flat siblings) from flat table rows scoped to one project — the inverse
-// of writes.ts's upsertProject. Validated through ProjectDetailSchema before returning, so a
-// reshape bug here fails loudly instead of shipping a malformed response.
+// Pulls flat table rows scoped to one project and maps each straight to its wire shape — no
+// tree-building, since ProjectDetail is five flat sibling arrays (see its own comment in
+// shared/schemas.ts). The inverse of writes.ts's upsertProject. Validated through
+// ProjectDetailSchema before returning, so a reshape bug here fails loudly instead of shipping a
+// malformed response.
 export async function loadProjectDetail(projectId: string): Promise<ProjectDetail | undefined> {
   const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
   if (!project) return undefined;
@@ -121,17 +122,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
   const nodeTagsByTarget = groupBy(nodeTagRows, (r) => r.nodeId);
   const relationshipTagsByTarget = groupBy(relationshipTagRows, (r) => r.relationshipId);
 
-  const nodesByOrbit = groupBy(
-    nodeRows.filter((n) => n.orbitId !== null),
-    (n) => n.orbitId as string,
-  );
-  const ungroupedNodesBySpace = groupBy(
-    nodeRows.filter((n) => n.orbitId === null),
-    (n) => n.spaceId,
-  );
-  const orbitsBySpace = groupBy(orbitRows, (o) => o.spaceId);
-
-  const toNodeDetail = (row: (typeof nodeRows)[number]) => ({
+  const toNode = (row: (typeof nodeRows)[number]): Node => ({
     id: row.id,
     spaceId: row.spaceId,
     orbitId: row.orbitId ?? undefined,
@@ -142,7 +133,7 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     metadata: row.metadata ?? undefined,
   });
 
-  const toOrbitDetail = (row: (typeof orbitRows)[number]): OrbitDetail => ({
+  const toOrbit = (row: (typeof orbitRows)[number]): Orbit => ({
     id: row.id,
     spaceId: row.spaceId,
     name: row.name,
@@ -151,10 +142,9 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     tagIds: (orbitTagsByTarget.get(row.id) ?? []).map((t) => t.tagId),
     notes: (notesByOrbit.get(row.id) ?? []).map(toNote),
     metadata: row.metadata ?? undefined,
-    nodes: (nodesByOrbit.get(row.id) ?? []).map(toNodeDetail),
   });
 
-  const toSpaceDetail = (row: (typeof spaceRows)[number]): SpaceDetail => ({
+  const toSpace = (row: (typeof spaceRows)[number]): Space => ({
     id: row.id,
     projectId: row.projectId,
     name: row.name,
@@ -163,8 +153,6 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
     tagIds: (spaceTagsByTarget.get(row.id) ?? []).map((t) => t.tagId),
     notes: (notesBySpace.get(row.id) ?? []).map(toNote),
     metadata: row.metadata ?? undefined,
-    orbits: (orbitsBySpace.get(row.id) ?? []).map(toOrbitDetail),
-    ungroupedNodes: (ungroupedNodesBySpace.get(row.id) ?? []).map(toNodeDetail),
   });
 
   const toTag = (row: (typeof tagRows)[number]): Tag => ({
@@ -175,7 +163,9 @@ export async function loadProjectDetail(projectId: string): Promise<ProjectDetai
 
   return ProjectDetailSchema.parse({
     project: { id: project.id, name: project.name, description: project.description ?? undefined },
-    spaces: spaceRows.map(toSpaceDetail),
+    spaces: spaceRows.map(toSpace),
+    orbits: orbitRows.map(toOrbit),
+    nodes: nodeRows.map(toNode),
     relationships: relationshipRows.map((r) => ({
       id: r.id,
       sourceId: r.sourceId,

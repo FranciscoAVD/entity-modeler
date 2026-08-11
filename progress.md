@@ -689,6 +689,32 @@ coupling fix** (not a plan.md phase — UI polish + bug fix, `client/src/scene/I
   afterwards**, so the feature was reverted rather than iterated on further. Either
   there's a second contributing factor not yet identified, or the diagnosis above is
   incomplete — don't assume it's solved if this is revisited.
+- **`bun test` vs `bun run test` in `server/`**: `package.json`'s `test` script is
+  `DB_FILE=:memory: bun test` — the env var is only set when invoked as `bun run test`.
+  Running bare `bun test` directly (as a shortcut during verification) silently falls
+  back to the real dev database (`server/data/app.db`) instead of an isolated in-memory
+  one, so every test run writes real rows into the dev DB. Went unnoticed for several
+  `bun test` invocations in one session before a routine curl-based verification turned
+  up 19 stray "Test Project"/"Apple"/"Mango"/"Zebra" projects (the exact fixture names
+  `persistence.test.ts` creates) alongside the one real "Demo Project" — confirmed as
+  pure test pollution (no real project of those names had been created) and cleaned up
+  by deleting `app.db` and letting `seedIfEmpty` reseed. Always use `bun run test` in
+  `server/`, never bare `bun test`.
+- **A `timeout`-wrapped background command can outlive the timeout**: `timeout 4 bun run
+  --filter '*' dev` (used to verify the root `dev` script starts both packages) was
+  assumed fully killed once the command returned "Terminated" — but `bun run --filter`
+  spawns each package's own dev process (vite, the server) as children of a child,
+  and `timeout` only guarantees killing the direct child it launched, not deeper
+  descendants. One `vite` process, and the process that spawned it, survived in the
+  background for the rest of the session undetected (a subsequent `ps aux | grep
+  -E "vite|bun run|hono|--filter"` check, prompted by the user asking "are you running
+  any dev servers?", should have caught this but apparently ran before the leak or
+  missed it) — only surfaced later via a stray `bun run --hot` boot showing already-open
+  ports. Cleaned up with `kill -9` on the specific PIDs (`pkill` pattern matching wasn't
+  reliable here) and verified via both `ps aux` and a port check (`ss -ltn`). Lesson: a
+  background verification command needs its *actual* child processes confirmed dead
+  afterward, not just the wrapper command's own exit — check by PID/port, not just by
+  re-running the same grep that already missed it once.
 
 **Tags scoped per project, search scoped to the active project, and the tag registry UI**
 (plan.md decision #11's remaining "planned but not built" item, now closed —
@@ -1140,6 +1166,65 @@ project — reading exactly like the seed data itself was changing.
   `projects` row on every save (that's structural to the "full-project replace via FK
   cascade" design, not a bug) — only the missing ordering was the actual defect.
 - Verified: server `tsc --noEmit` clean, 6/6 server tests passing (up from 5).
+
+**Wire format flattened — `ProjectDetail` is five flat sibling arrays, not a nested tree**
+(`shared/src/schemas.ts`, `client/src/store/{serialize,store}.ts`, `client/src/store/
+selectors.ts`, `server/src/db/{reads,writes,seed}.ts`, `server/src/db/persistence.test.ts`,
+`plan.md`)
+User-driven design critique: both the client's store and the server's SQL schema already
+store this data flat/normalized (decision #15 — parent references point up via id fields,
+no nested child arrays), yet the wire format (`ProjectDetailSchema`) nested
+`spaces → orbits → nodes` — the one place in the whole system doing tree-shaping, and
+purely wasted work, since it was built on every save (`serializeProject` walking nested
+selectors) and immediately undone again on every load (`loadProjectDetail`'s
+`nodesByOrbit`/`ungroupedNodesBySpace`/`orbitsBySpace` groupBy-and-rebuild). It was also
+already inconsistent with itself — `relationships`/`tags` were flat siblings in the same
+schema, only spaces/orbits/nodes were nested.
+- `ProjectDetailSchema` reduced from a nested tree to `{ project, spaces, orbits, nodes,
+  relationships, tags }` — five flat arrays, each object keeping its existing parent-id
+  field (`Orbit.spaceId`, `Node.spaceId`/`orbitId`) exactly as it's stored everywhere
+  else. `OrbitDetailSchema`/`SpaceDetailSchema` (the nested-variant types) are gone.
+- `client/src/store/serialize.ts`'s `serializeProject` dropped from a three-level nested
+  `.map()` walk to five straight selector calls (`spacesInProject`, `nodesInProject`,
+  `relationshipsInProject`, `tagsInProject`, and a new `orbitsInProject` added to
+  `selectors.ts` — same "in project" pattern `nodesInProject` already used, just missing
+  for orbits until now).
+- `client/src/store/store.ts`'s `hydrateProject` simplified from a nested walk that
+  manually reconstructed each Space/Orbit object field-by-field (to strip out the
+  now-gone `orbits`/`ungroupedNodes`/`nodes` wire-only fields) to five flat `for` loops,
+  each just `map.set(x.id, x)` — the same shape `tags`/`relationships` were already
+  hydrated with before this change, now consistent across all five types.
+- `server/src/db/writes.ts`'s `upsertProject` lost the `flatOrbits`/`flatNodes`
+  flattening step entirely (`data.spaces.flatMap((s) => s.orbits)` etc.) — every
+  reference just reads `data.orbits`/`data.nodes` directly now, since they arrive flat.
+- `server/src/db/reads.ts`'s `loadProjectDetail` lost its nested-rebuild machinery
+  (`toNodeDetail`/`toOrbitDetail`/`toSpaceDetail` and the `nodesByOrbit`/
+  `ungroupedNodesBySpace`/`orbitsBySpace` groupBy calls) in favor of three flat mappers
+  (`toNode`/`toOrbit`/`toSpace`) applied directly to each table's query rows.
+- `server/src/db/seed.ts`'s demo project data un-nested to match — same tags/notes/
+  metadata content as before, just spaces/orbits/nodes as three top-level arrays instead
+  of two levels of inline nesting.
+- `persistence.test.ts` updated to build/assert the flat shape; `minimalProject`'s base
+  defaults gained `orbits: []`/`nodes: []` alongside the existing `spaces: []`.
+- **Two unrelated problems found during end-to-end verification, both fixed in the same
+  pass** (see "Notable bugs" below for the full write-up): (1) a `vite` + dev-server
+  process from an earlier session verification had been running in the background,
+  undetected, since a `timeout`-wrapped command's grandchildren outlived the timeout;
+  (2) repeated bare `bun test` invocations in `server/` this session (instead of
+  `bun run test`) had been writing real rows into the actual dev database
+  (`server/data/app.db`) instead of an isolated in-memory one, leaving 19 stray test-
+  fixture projects behind it. Both cleaned up: processes killed by PID and verified via
+  `ps`/`ss`, database wiped and reseeded clean (confirmed as pure test pollution — no
+  real project matched those fixture names — before deleting).
+- Verified end-to-end against a real running server (not just unit tests): booted fresh,
+  `GET /projects` and `GET /projects/:id` both confirmed to return the new flat shape
+  (top-level keys `project`/`spaces`/`orbits`/`nodes`/`relationships`/`tags`, no `orbits`
+  key nested inside a space), counts matched the demo project exactly (2 spaces, 2
+  orbits, 4 nodes, 3 relationships, 6 tags), server then fully stopped and confirmed via
+  both process list and port check. Also: server `tsc --noEmit`, shared `tsc --noEmit`,
+  client `tsc -b && vite build`, and `oxlint` all clean (same 4 pre-existing warnings);
+  6/6 server tests and 101/101 client tests passing (both unchanged in count — this pass
+  didn't add or remove test cases, just reshaped what they assert against).
 
 ## TODO — remaining phases
 

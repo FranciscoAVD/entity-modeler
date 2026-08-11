@@ -87,25 +87,21 @@ export const RelationshipSchema = z.object({
 });
 export type Relationship = z.infer<typeof RelationshipSchema>;
 
-// The nested tree shape plan.md's Phase 9 design commits to: project -> spaces -> (orbits ->
-// nodes) + ungroupedNodes, with relationships/tags as flat siblings (neither is owned by a single
-// container — a relationship spans two nodes that may be in different spaces, and tags are a
-// shared per-project registry). Used both as the GET /projects/:id response and the PUT
-// /projects/:id request body (full-project upsert) — same shape both directions.
-const OrbitDetailSchema = OrbitSchema.extend({
-  nodes: z.array(NodeSchema),
-});
-export type OrbitDetail = z.infer<typeof OrbitDetailSchema>;
-
-const SpaceDetailSchema = SpaceSchema.extend({
-  orbits: z.array(OrbitDetailSchema),
-  ungroupedNodes: z.array(NodeSchema),
-});
-export type SpaceDetail = z.infer<typeof SpaceDetailSchema>;
-
+// Five flat sibling arrays, not a nested tree — matches how both sides actually store this data:
+// the client's store is flat Map<id,T> per type with parent-pointer fields (Space.projectId,
+// Orbit.spaceId, Node.spaceId/orbitId — plan.md decision #15), and the server's SQL schema is one
+// table per type with the same FK columns. An earlier version of this schema nested
+// spaces -> orbits -> nodes to read as a natural REST resource tree, but neither side stores it
+// that way — every save had to build a tree the client doesn't have (serializeProject) and every
+// load had to un-nest it again (loadProjectDetail's groupBy-and-rebuild), pure overhead in both
+// directions for data that was already normalized on both ends. Used both as the
+// GET /projects/:id response and the PUT /projects/:id request body (full-project upsert) — same
+// shape both directions.
 export const ProjectDetailSchema = z.object({
   project: ProjectSummarySchema,
-  spaces: z.array(SpaceDetailSchema),
+  spaces: z.array(SpaceSchema),
+  orbits: z.array(OrbitSchema),
+  nodes: z.array(NodeSchema),
   relationships: z.array(RelationshipSchema),
   tags: z.array(TagSchema),
 });

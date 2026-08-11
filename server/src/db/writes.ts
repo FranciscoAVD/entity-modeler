@@ -36,12 +36,6 @@ export function upsertProject(id: string, data: ProjectDetail): void {
         .run();
     }
 
-    const flatOrbits = data.spaces.flatMap((s) => s.orbits);
-    const flatNodes = data.spaces.flatMap((s) => [
-      ...s.ungroupedNodes,
-      ...s.orbits.flatMap((o) => o.nodes),
-    ]);
-
     if (data.spaces.length) {
       tx.insert(spaces)
         .values(
@@ -59,10 +53,10 @@ export function upsertProject(id: string, data: ProjectDetail): void {
         .run();
     }
 
-    if (flatOrbits.length) {
+    if (data.orbits.length) {
       tx.insert(orbits)
         .values(
-          flatOrbits.map((o) => ({
+          data.orbits.map((o) => ({
             id: o.id,
             spaceId: o.spaceId,
             name: o.name,
@@ -76,10 +70,10 @@ export function upsertProject(id: string, data: ProjectDetail): void {
         .run();
     }
 
-    if (flatNodes.length) {
+    if (data.nodes.length) {
       tx.insert(nodes)
         .values(
-          flatNodes.map((n) => ({
+          data.nodes.map((n) => ({
             id: n.id,
             spaceId: n.spaceId,
             orbitId: n.orbitId,
@@ -111,8 +105,8 @@ export function upsertProject(id: string, data: ProjectDetail): void {
     // which of the four flatMaps below a given note came from.
     const allNotes = [
       ...data.spaces.flatMap((s) => s.notes.map((note) => ({ note, spaceId: s.id }))),
-      ...flatOrbits.flatMap((o) => o.notes.map((note) => ({ note, orbitId: o.id }))),
-      ...flatNodes.flatMap((n) => n.notes.map((note) => ({ note, nodeId: n.id }))),
+      ...data.orbits.flatMap((o) => o.notes.map((note) => ({ note, orbitId: o.id }))),
+      ...data.nodes.flatMap((n) => n.notes.map((note) => ({ note, nodeId: n.id }))),
       ...data.relationships.flatMap((r) => r.notes.map((note) => ({ note, relationshipId: r.id }))),
     ];
     if (allNotes.length) {
@@ -133,10 +127,10 @@ export function upsertProject(id: string, data: ProjectDetail): void {
     const spaceTagRows = data.spaces.flatMap((s) => s.tagIds.map((tagId) => ({ spaceId: s.id, tagId })));
     if (spaceTagRows.length) tx.insert(spaceTags).values(spaceTagRows).run();
 
-    const orbitTagRows = flatOrbits.flatMap((o) => o.tagIds.map((tagId) => ({ orbitId: o.id, tagId })));
+    const orbitTagRows = data.orbits.flatMap((o) => o.tagIds.map((tagId) => ({ orbitId: o.id, tagId })));
     if (orbitTagRows.length) tx.insert(orbitTags).values(orbitTagRows).run();
 
-    const nodeTagRows = flatNodes.flatMap((n) => n.tagIds.map((tagId) => ({ nodeId: n.id, tagId })));
+    const nodeTagRows = data.nodes.flatMap((n) => n.tagIds.map((tagId) => ({ nodeId: n.id, tagId })));
     if (nodeTagRows.length) tx.insert(nodeTags).values(nodeTagRows).run();
 
     const relationshipTagRows = data.relationships.flatMap((r) =>

@@ -239,34 +239,13 @@ export const useModelStore = create<ModelState & ModelActions>()(subscribeWithSe
     for (const tag of detail.tags) tags.set(tag.id, tag);
 
     const spaces = new Map(state.spaces);
+    for (const s of detail.spaces) spaces.set(s.id, s);
+
     const orbits = new Map(state.orbits);
+    for (const o of detail.orbits) orbits.set(o.id, o);
+
     const nodes = new Map(state.nodes);
-    for (const s of detail.spaces) {
-      spaces.set(s.id, {
-        id: s.id,
-        projectId: s.projectId,
-        name: s.name,
-        label: s.label,
-        origin: s.origin,
-        tagIds: s.tagIds,
-        notes: s.notes,
-        metadata: s.metadata,
-      });
-      for (const o of s.orbits) {
-        orbits.set(o.id, {
-          id: o.id,
-          spaceId: o.spaceId,
-          name: o.name,
-          label: o.label,
-          origin: o.origin,
-          tagIds: o.tagIds,
-          notes: o.notes,
-          metadata: o.metadata,
-        });
-        for (const n of o.nodes) nodes.set(n.id, n);
-      }
-      for (const n of s.ungroupedNodes) nodes.set(n.id, n);
-    }
+    for (const n of detail.nodes) nodes.set(n.id, n);
 
     const relationships = new Map(state.relationships);
     for (const r of detail.relationships) relationships.set(r.id, r);

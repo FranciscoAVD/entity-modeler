@@ -12,6 +12,8 @@ function minimalProject(id: string, overrides?: Partial<ProjectDetail>): Project
   return {
     project: { id, name: "Test Project" },
     spaces: [],
+    orbits: [],
+    nodes: [],
     relationships: [],
     tags: [],
     ...overrides,
@@ -34,7 +36,7 @@ describe("seedIfEmpty", () => {
 });
 
 describe("upsertProject / loadProjectDetail round-trip", () => {
-  it("preserves the full nested tree — spaces, orbits, ungrouped nodes, relationships, tags, notes, and metadata", async () => {
+  it("preserves the full flat shape — spaces, orbits, nodes, relationships, tags, notes, and metadata", async () => {
     const id = crypto.randomUUID();
     const spaceId = crypto.randomUUID();
     const orbitId = crypto.randomUUID();
@@ -54,38 +56,36 @@ describe("upsertProject / loadProjectDetail round-trip", () => {
           tagIds: [tagId],
           notes: [{ id: crypto.randomUUID(), title: "N", text: "hello", createdAt: 123 }],
           metadata: { region: "us-east-1" },
-          orbits: [
-            {
-              id: orbitId,
-              spaceId,
-              name: "Orbit A",
-              origin: { x: 0.5, y: 0, z: 0 },
-              tagIds: [],
-              notes: [],
-              nodes: [
-                {
-                  id: nodeInOrbitId,
-                  spaceId,
-                  orbitId,
-                  name: "Node A",
-                  position: { x: 1, y: 1, z: 1 },
-                  tagIds: [tagId],
-                  notes: [],
-                  metadata: { version: "1.0" },
-                },
-              ],
-            },
-          ],
-          ungroupedNodes: [
-            {
-              id: ungroupedNodeId,
-              spaceId,
-              name: "Ungrouped",
-              position: { x: -1, y: 0, z: 0 },
-              tagIds: [],
-              notes: [],
-            },
-          ],
+        },
+      ],
+      orbits: [
+        {
+          id: orbitId,
+          spaceId,
+          name: "Orbit A",
+          origin: { x: 0.5, y: 0, z: 0 },
+          tagIds: [],
+          notes: [],
+        },
+      ],
+      nodes: [
+        {
+          id: nodeInOrbitId,
+          spaceId,
+          orbitId,
+          name: "Node A",
+          position: { x: 1, y: 1, z: 1 },
+          tagIds: [tagId],
+          notes: [],
+          metadata: { version: "1.0" },
+        },
+        {
+          id: ungroupedNodeId,
+          spaceId,
+          name: "Ungrouped",
+          position: { x: -1, y: 0, z: 0 },
+          tagIds: [],
+          notes: [],
         },
       ],
       relationships: [
@@ -115,19 +115,11 @@ describe("upsertProject / loadProjectDetail round-trip", () => {
 
     const original = minimalProject(id, {
       spaces: [
-        {
-          id: spaceId,
-          projectId: id,
-          name: "Space A",
-          origin: { x: 0, y: 0, z: 0 },
-          tagIds: [],
-          notes: [],
-          orbits: [],
-          ungroupedNodes: [
-            { id: nodeAId, spaceId, name: "Node A", position: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
-            { id: nodeBId, spaceId, name: "Node B", position: { x: 1, y: 0, z: 0 }, tagIds: [], notes: [] },
-          ],
-        },
+        { id: spaceId, projectId: id, name: "Space A", origin: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
+      ],
+      nodes: [
+        { id: nodeAId, spaceId, name: "Node A", position: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
+        { id: nodeBId, spaceId, name: "Node B", position: { x: 1, y: 0, z: 0 }, tagIds: [], notes: [] },
       ],
       relationships: [
         {
@@ -144,26 +136,18 @@ describe("upsertProject / loadProjectDetail round-trip", () => {
 
     const replacement = minimalProject(id, {
       spaces: [
-        {
-          id: spaceId,
-          projectId: id,
-          name: "Space A",
-          origin: { x: 0, y: 0, z: 0 },
-          tagIds: [],
-          notes: [],
-          orbits: [],
-          ungroupedNodes: [
-            { id: nodeAId, spaceId, name: "Node A Renamed", position: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
-          ],
-        },
+        { id: spaceId, projectId: id, name: "Space A", origin: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
+      ],
+      nodes: [
+        { id: nodeAId, spaceId, name: "Node A Renamed", position: { x: 0, y: 0, z: 0 }, tagIds: [], notes: [] },
       ],
       relationships: [],
     });
     upsertProject(id, replacement);
 
     const loaded = await loadProjectDetail(id);
-    expect(loaded?.spaces[0]?.ungroupedNodes).toHaveLength(1);
-    expect(loaded?.spaces[0]?.ungroupedNodes[0]?.name).toBe("Node A Renamed");
+    expect(loaded?.nodes).toHaveLength(1);
+    expect(loaded?.nodes[0]?.name).toBe("Node A Renamed");
     expect(loaded?.relationships).toHaveLength(0);
   });
 

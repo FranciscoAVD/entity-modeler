@@ -52,6 +52,11 @@ export function nodesInProject(state: ModelState, projectId: string): Node[] {
   return [...state.nodes.values()].filter((e) => spaceIds.has(e.spaceId));
 }
 
+export function orbitsInProject(state: ModelState, projectId: string): Orbit[] {
+  const spaceIds = new Set(spacesInProject(state, projectId).map((s) => s.id));
+  return [...state.orbits.values()].filter((o) => spaceIds.has(o.spaceId));
+}
+
 export function projectIdForNode(state: ModelState, nodeId: string): string | undefined {
   const node = state.nodes.get(nodeId);
   if (!node) return undefined;
