@@ -26,11 +26,12 @@ function ObjectIcon({ type }: { type: SearchResult["type"] }) {
 
 // Opened by clicking a Tag result in SidebarSearch — read-only (no rename/delete; that was
 // TagBrowserDialog's job, retired in favor of folding tag search into the main search box).
-// Clicking an object row focuses the camera exactly like a SidebarTree row click: same
-// visibility-gated focusOn, cascading through parent space/orbit (isSpaceVisible/isOrbitVisible/
-// isNodeVisible from visibility.ts) rather than SidebarTree's own slightly-inconsistent inline
-// check (its OrbitRow only looks at the orbit's own hidden flag, not its parent space's) —
-// deliberately using the more-correct cascading version here per explicit direction.
+// Clicking an object row opens it (openTab) rather than just focusing the camera — unlike a
+// plain sidebar-row/search-result click, picking something out of "what does this tag apply to"
+// reads more like deliberately choosing to inspect that object, so the info panel opens too, same
+// as a double-click in the 3D scene. Visibility is gated the same cascading way SidebarTree's own
+// inline check should be but isn't (its OrbitRow only looks at the orbit's own hidden flag, not
+// its parent space's) — deliberately using the more-correct cascading version here.
 export function TagObjectsDialog({
   tag,
   onOpenChange,
@@ -42,7 +43,7 @@ export function TagObjectsDialog({
   const orbits = useModelStore((state) => state.orbits);
   const nodes = useModelStore((state) => state.nodes);
   const relationships = useModelStore((state) => state.relationships);
-  const focusOn = useViewStore((state) => state.focusOn);
+  const openTab = useModelStore((state) => state.openTab);
   const hiddenSpaceIds = useViewStore((state) => state.hiddenSpaceIds);
   const hiddenOrbitIds = useViewStore((state) => state.hiddenOrbitIds);
 
@@ -66,7 +67,7 @@ export function TagObjectsDialog({
             ? isRelationshipVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds)
             : isNodeVisible(modelState, result.id, hiddenSpaceIds, hiddenOrbitIds);
     if (!visible) return;
-    focusOn(result.id, result.type);
+    openTab(result.id, result.type);
     onOpenChange(false);
   };
 

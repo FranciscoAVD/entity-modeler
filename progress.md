@@ -1504,6 +1504,28 @@ Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warn
 browser verification done this session (per standing preference) — worth a visual
 recheck of the dialog footer, combobox chips, and outline-button hover state.
 
+**TagObjectsDialog: picking an object opens it, not just camera focus**
+(`client/src/scene/TagObjectsDialog.tsx`, `plan.md`)
+User request. Previously `selectObject` called `focusOn(result.id, result.type)` —
+camera-only, same as every other search result. Swapped for `openTab(result.id,
+result.type)` (a model-store action, not `viewStore`'s `focusOn`) — adds it to the
+recency history and makes it the active tab, so the info panel opens alongside the
+camera fly-to (CameraRig already reacts to `activeTabId` changes on its own, so setting
+it via `openTab` is enough to trigger the fly-to too — no separate `focusOn` call
+needed). Used `openTab` rather than `setActiveTab` deliberately: `setActiveTab` throws
+if the id isn't already in `openTabs`, which a tag's carrier objects have no guarantee
+of being (could be something never viewed before), whereas `openTab` handles "add if
+missing, then activate" in one step — the same action a double-click in the 3D scene or
+a "View notes" context-menu item already uses. This makes `TagObjectsDialog` the one
+exception to "search results are camera-only, opening a tab needs a double-click" —
+deliberate, since picking something out of "what does this tag apply to" already reads
+as choosing to inspect it, not a passing glance.
+Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warnings),
+116 tests passing (unchanged — presentational wiring only, no new coverage, consistent
+with how this dialog isn't otherwise unit-tested). No browser verification done this
+session (per standing preference). `plan.md`'s search-architecture section updated in
+both places this behavior was documented.
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
