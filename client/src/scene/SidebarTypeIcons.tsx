@@ -39,3 +39,13 @@ export function NodeIcon({ className }: SidebarTypeIconProps) {
     />
   );
 }
+
+// Relationships have no fixed per-type hue anywhere else in the app (their title/edge color
+// depends on scope — local/cross-orbit/cross-space — not a signature color like Space/Orbit/
+// Node have), so this stays a neutral/muted badge rather than inventing one just for this list.
+export function RelationshipIcon({ className }: SidebarTypeIconProps) {
+  const Icon = TYPE_ICONS.relationship;
+  return (
+    <Icon className={cn("size-6 p-1 rounded-full text-muted-foreground", "bg-muted/40", className)} />
+  );
+}

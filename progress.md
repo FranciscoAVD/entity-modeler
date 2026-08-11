@@ -1035,6 +1035,51 @@ avoid. Fixed in two parts, both confirmed with the user before writing code.
   unrelated); 100 client tests passing. No browser verification done this session (per
   standing preference — user verifies UI changes themselves).
 
+**Recently-viewed moved from the Header dropdown into the sidebar search box** (closes a
+plan.md open question logged two sessions ago — `client/src/scene/{SidebarSearch,
+SidebarTypeIcons,Header}.tsx`, `TabBar.tsx` (deleted), `client/src/store/selectors.ts`,
+`plan.md`)
+User-requested relocation, two design points confirmed up front before writing code: (1)
+the Header's standalone "Recently viewed" `Select` (`TabBar.tsx`) is removed outright, not
+kept as a second entry point; (2) picking a recently-viewed item from the search box keeps
+its *old* behavior — fly the camera **and** open the side panel (`setActiveTab`, decision
+#12) — rather than switching to the camera-only `focusOn` every other search result uses.
+- `SidebarSearch.tsx`'s combobox `open` state is now controlled locally, with the input's
+  `onFocus` forcing it open — previously fully uncontrolled, relying on base-ui's own
+  defaults, which is also why `openOnInputClick={false}` existed (to stop an empty query
+  from popping an empty "No results." on click); that prop is gone now that opening on an
+  empty query is the whole point.
+- When the query is empty, the dropdown shows a single "Recently viewed" section built
+  from `openTabs` (newest first, same order `TabBar` used) instead of the four Tags/
+  Spaces/Orbits/Nodes sections, which return empty on a blank query anyway. Typing
+  anything reverts to the existing search behavior unchanged.
+- Recently-viewed entries can include relationships, which `SidebarSearch` never rendered
+  before (no name field, no sidebar row — decision #11 explicitly keeps them out of *text*
+  search). Modeled as a `RecentItem` (`Tab` + `kind: "recent"` + a precomputed `label`,
+  since relationships need `tabLabel`'s endpoint-based fallback, not a plain `name` field)
+  unioned with the existing `SearchResult` as the combobox's value type, discriminated via
+  a `"kind" in item` guard everywhere the two need different handling (key, label, click
+  behavior).
+- New `RelationshipIcon` in `SidebarTypeIcons.tsx`, needed since relationships now appear
+  in this list — deliberately a neutral/muted badge rather than a fixed hue, since
+  relationships already have no fixed color identity anywhere else in the app (their edge/
+  title color depends on scope — local/cross-orbit/cross-space — not a signature hue like
+  Space/Orbit/Node have).
+- `selectors.ts`'s `tabLabel` had its parameter type relaxed from the full `ModelState` to
+  `Pick<ModelState, "nodes" | "orbits" | "spaces" | "relationships">` — the only fields it
+  actually reads — so `SidebarSearch` can call it without threading the whole store
+  through; matches the same `Pick<...>` pattern `objectsForTag` already uses in the same
+  file. Existing callers (`TabBar`'s `TabOption` used to pass a full reactive `state`)
+  keep working unchanged, since `ModelState` structurally satisfies the narrower type.
+- `plan.md` updated in several places: decision #12, the selection-model section, the
+  click-to-reveal flow section, and Phase 6's status line all described a Header dropdown
+  that no longer exists; the matching open-questions entry ("SidebarSearch shows nothing
+  until you start typing…") is removed outright now that it's resolved.
+- Verified: `tsc -b && vite build` clean; `oxlint` clean (same 4 pre-existing warnings,
+  unrelated); 100 tests passing (no test coverage added for this UI itself, consistent
+  with how the rest of `SidebarSearch`/`InfoPanel` are — presentational, not unit-tested).
+  No browser verification done this session (per standing preference).
+
 ## TODO — remaining phases
 
 **Phase 7 — 3D auto-layout**

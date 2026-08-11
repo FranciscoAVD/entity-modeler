@@ -41,7 +41,7 @@ Built: a UI for the tag registry — TagEditor's free-text input autocompletes a
 
 A single click on a node/edge/orbit/space only moves the camera (focus-only, same as a sidebar row click); a double-click opens a tab (rather than replacing the current selection), so multiple objects can be inspected side by side — spaces were originally excluded from tabs entirely (see below), but now participate identically to orbits/nodes
 Clicking a tab flies the camera to that object — animated (tweened, ease-in-out, ~400–800ms), never an instant snap, to preserve spatial orientation
-Tabs are no longer a user-managed open/close list — this originally had an explicit "close tab" action, but a row of removable chips got cluttered fast with more than a couple objects open. openTabs is now a recency-capped history (the 5 most recently viewed objects, oldest evicted automatically), presented as a single dropdown rather than a chip row. An object's tab is only removed early if the object itself is deleted (cascade), in which case the next remaining tab (or none) becomes active
+Tabs are no longer a user-managed open/close list — this originally had an explicit "close tab" action, but a row of removable chips got cluttered fast with more than a couple objects open. openTabs is now a recency-capped history (the 5 most recently viewed objects, oldest evicted automatically) — originally presented as a standalone dropdown in the Header, now surfaced from the sidebar's search box instead: focusing the (empty) search input shows it as a "Recently viewed" section, picking an entry flies the camera and opens the panel exactly like the old dropdown did. An object's tab is only removed early if the object itself is deleted (cascade), in which case the next remaining tab (or none) becomes active
 A "reset view" control exists independent of tabs, returning to a full-project overview, so users aren't trapped at node-level zoom after opening several tabs
 
 13. Empty space/orbit rendering Tinted, transparent, color-coded spheres/ellipsoids — space, orbit, and node each get a distinct hue or saturation level so nesting is visually obvious at a glance. For empty groups specifically:
@@ -125,7 +125,7 @@ openTabs: { id, type: "node" | "relationship" | "orbit" | "space" }[] — a rece
 activeTabId: string | null
 A single click on a node/edge/orbit/space in the 3D scene only moves the camera (via the same focusOn/focusTarget mechanism a sidebar row click uses) — it does not add a tab. Double-clicking adds it to openTabs (moving it to most-recent if already present) and makes it active
 Making a tab active triggers an animated camera fly-to centered on that object
-There's no manual "close" of the openTabs history itself — an entry only leaves openTabs early if its underlying object is deleted (cascade), in which case the next remaining tab (or none) becomes active; otherwise it just ages out once 5 newer objects have been viewed. The side panel's own visibility is a separate concern: a close button clears activeTabId (clearActiveTab) without touching openTabs, so the panel can be dismissed and later reopened at the same point via the Header's "Recently viewed" select
+There's no manual "close" of the openTabs history itself — an entry only leaves openTabs early if its underlying object is deleted (cascade), in which case the next remaining tab (or none) becomes active; otherwise it just ages out once 5 newer objects have been viewed. The side panel's own visibility is a separate concern: a close button clears activeTabId (clearActiveTab) without touching openTabs, so the panel can be dismissed and later reopened at the same point via the sidebar search box's "Recently viewed" section (focus the empty input)
 A separate "reset view" action clears camera focus and flies to a default overview position, without necessarily affecting openTabs
 
 Search
@@ -152,7 +152,7 @@ Spaces: raycast against the same kind of light bounding volume as orbits — spa
 Flow
 
 Click → raycast → resolve { id, type } → focus camera only (single click) or open/focus tab (double-click) → look up record → emit select event
-DOM tab bar + panel: the tab bar is a single dropdown (recently-viewed history, title + type icon per option) rather than a row of open-selection chips, panel below shows the active tab's full info (title, tags/metadata for spaces/orbits/nodes, cardinality for relationships, notes as prose, metadata as key-value table)
+DOM tab bar + panel: the recently-viewed history (title + type icon per entry) no longer has its own dedicated tab bar — it surfaces as a "Recently viewed" section in the sidebar search box when the input is focused with an empty query, rather than a standalone Header dropdown or a row of open-selection chips; panel below shows the active tab's full info (title, tags/metadata for spaces/orbits/nodes, cardinality for relationships, notes as prose, metadata as key-value table)
 In-scene highlight on whichever object the active tab represents — currently a static emissive/opacity bump (node emissive color, edge width/opacity, space/orbit boundary opacity via an `active` prop), not yet an outline shader or an animated pulse
 Vector3.project() available for optional in-scene panel anchoring near the clicked object's screen position — not implemented yet
 
@@ -207,7 +207,7 @@ Camera-plane-constrained dragging for repositioning nodes (modifier key for dept
 
 Phase 6 — Tabs, notes & search UI (done — add/edit/delete note UI was scoped out of the initial pass and delivered later under Phase 8's work instead, see below)
 
-Tab bar is now a recently-viewed Select (switch only, no manual open/close — see decision #12), info panel generic across node/relationship/orbit/space, with node/orbit/space sharing one GroupDetails renderer since they're now the same shape (tags, metadata, notes)
+Recently-viewed history (switch only, no manual open/close — see decision #12) now surfaces from the sidebar search box (focus the empty input) rather than a dedicated tab bar, info panel generic across node/relationship/orbit/space, with node/orbit/space sharing one GroupDetails renderer since they're now the same shape (tags, metadata, notes)
 Space info now goes through this same panel (SpaceDetails) rather than staying a separate always-on label-only affordance — this reverses the line's original assumption, see the reveal-flow note above
 Search input (tags + titles); results fly the camera like a sidebar-row click, not a full tab-open — see the Search section above
 Add/edit/delete note UI, including metadata key-value editing, writing back to the data model at any level — built, but as part of Phase 8's editing-UI pass rather than in this one
@@ -269,4 +269,3 @@ Testing strategy for raycasting/hit-detection and layout correctness (visual reg
 Revisit collaboration/concurrent editing if multi-user need arises later
 Merging two tags (e.g. after a rename collides with an existing tag in the same project) — currently renameTag just throws rather than merging the two registry entries and remapping every tagIds reference onto one
 Tag rename/delete UI — TagObjectsDialog (opened from a Tags search result) is read-only for now; TagBrowserDialog used to offer both but was retired when tag search moved into the main search box. renameTag/deleteTag still exist and work at the store layer, just have no UI trigger currently
-SidebarSearch currently shows nothing until you start typing (empty query → empty results, see selectors.ts's search functions all early-returning on a blank query) — clicking into the search box with nothing typed should instead pop the 5 most-recently-viewed objects (openTabs, decision #12's recency history) as a starting point, same data already backing the Header's "Recently viewed" select

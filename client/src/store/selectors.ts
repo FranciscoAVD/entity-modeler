@@ -222,8 +222,14 @@ export function searchAll(state: SearchableState, query: string, projectId: stri
 }
 
 // Resolves a tab's display label from the object it points at. Relationships have no name field,
-// so they're labeled by their endpoints instead (e.g. "Node 1 -> Node 2").
-export function tabLabel(state: ModelState, tab: Tab): string {
+// so they're labeled by their endpoints instead (e.g. "Node 1 -> Node 2"). Takes just the four
+// maps it actually reads (not the full ModelState) so callers like SidebarSearch's recently-viewed
+// list don't need to thread the whole store through — same Pick<ModelState, ...> pattern
+// objectsForTag above already uses.
+export function tabLabel(
+  state: Pick<ModelState, "nodes" | "orbits" | "spaces" | "relationships">,
+  tab: Tab,
+): string {
   if (tab.type === "node") return state.nodes.get(tab.id)?.name ?? "Unknown node";
 
   if (tab.type === "orbit") {
