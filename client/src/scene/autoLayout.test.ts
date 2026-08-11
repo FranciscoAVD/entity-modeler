@@ -69,6 +69,43 @@ describe("layoutGroup", () => {
       }
     }
   });
+
+  // Regression: unconstrained groups (no containerRadius — only the project tier hits this)
+  // previously seeded within a spread of just entities.length * 0.5, tiny next to real entity
+  // radii, so a handful of spaces started deep inside each other with only weak repulsion to
+  // undo it — the reported symptom was everything "gathering around the origin."
+  it("spreads unconstrained entities out relative to their own size, not just their count", () => {
+    const entities = [
+      { id: "a", radius: 5 },
+      { id: "b", radius: 5 },
+      { id: "c", radius: 5 },
+    ];
+    const positions = layoutGroup(entities, [], undefined);
+
+    for (let i = 0; i < entities.length; i++) {
+      for (let j = i + 1; j < entities.length; j++) {
+        const dist = length(subtract(positions.get(entities[i].id)!, positions.get(entities[j].id)!));
+        // Comfortably clear of merely "not overlapping" (radius + radius = 10) — actual breathing
+        // room, not a bare minimum.
+        expect(dist).toBeGreaterThan(entities[i].radius + entities[j].radius + 2);
+      }
+    }
+  });
+
+  // User-requested: new objects should land on the same horizontal plane rather than being
+  // scattered above/below it, since panning/zooming across a plane is much easier to navigate
+  // than searching vertically.
+  it("keeps every entity in the y=0 plane", () => {
+    const entities = Array.from({ length: 10 }, (_, i) => ({ id: `n${i}`, radius: 0.6 }));
+    const links = [
+      { a: "n0", b: "n1", weight: 1 },
+      { a: "n2", b: "n3", weight: 2 },
+    ];
+    for (const containerRadius of [undefined, 8]) {
+      const positions = layoutGroup(entities, links, containerRadius);
+      for (const pos of positions.values()) expect(pos.y).toBe(0);
+    }
+  });
 });
 
 describe("autoLayoutProject", () => {
@@ -156,5 +193,53 @@ describe("autoLayoutProject", () => {
     expect(length(subtract(ungrouped, orbitOrigin))).toBeGreaterThan(orbitRadius + NODE_RADIUS);
     expect(length(ungrouped)).toBeLessThanOrEqual(spaceRadius - NODE_RADIUS + 1e-6);
     expect(length(orbitOrigin)).toBeLessThanOrEqual(spaceRadius - orbitRadius + 1e-6);
+  });
+
+  it("spreads unrelated spaces apart rather than clustering them near the project origin", () => {
+    const state = {
+      spaces: new Map([
+        ["sa", space("sa", "p1")],
+        ["sb", space("sb", "p1")],
+        ["sc", space("sc", "p1")],
+      ]),
+      orbits: new Map<string, Orbit>(),
+      nodes: new Map<string, Node>(),
+      relationships: new Map<string, Relationship>(),
+    };
+
+    const result = autoLayoutProject(state, "p1");
+    const spaceRadius = spaceRadiusForChildren([], 0); // empty space, same for all three
+    const ids = ["sa", "sb", "sc"];
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const dist = length(subtract(result.spaces.get(ids[i])!.origin, result.spaces.get(ids[j])!.origin));
+        expect(dist).toBeGreaterThan(spaceRadius * 2 + 2);
+      }
+    }
+  });
+
+  it("keeps every space/orbit/node in the y=0 plane", () => {
+    const state = {
+      spaces: new Map([
+        ["s1", space("s1", "p1")],
+        ["s2", space("s2", "p1")],
+      ]),
+      orbits: new Map([
+        ["o1", orbit("o1", "s1")],
+        ["o2", orbit("o2", "s1")],
+      ]),
+      nodes: new Map([
+        ["n1", node("n1", "s1", "o1")],
+        ["n2", node("n2", "s1", "o1")],
+        ["n3", node("n3", "s1")],
+        ["n4", node("n4", "s2")],
+      ]),
+      relationships: new Map([["r1", relationship("r1", "n1", "n4")]]),
+    };
+
+    const result = autoLayoutProject(state, "p1");
+    for (const s of result.spaces.values()) expect(s.origin.y).toBe(0);
+    for (const o of result.orbits.values()) expect(o.origin.y).toBe(0);
+    for (const n of result.nodes.values()) expect(n.position.y).toBe(0);
   });
 });

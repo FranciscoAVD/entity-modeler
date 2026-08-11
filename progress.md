@@ -2,7 +2,7 @@
 
 Status as of 2026-08-11. Monorepo scaffolded (Bun workspaces: `client` Vite/React/R3F,
 `server` Bun+Hono+SQLite/Drizzle, `shared` Zod schemas). Server-backed persistence is
-live — see Phase 9 below. Phase 7 (3D auto-layout) is also now done — see below. 109
+live — see Phase 9 below. Phase 7 (3D auto-layout) is also now done — see below. 113
 client tests + 6 server tests passing, build/lint clean in both packages. Full plan
 lives in [plan.md](plan.md); build order is `0 → 1 → 2 → 3 → 5 → 4 → 6 → 7 → 8 → 9 →
 10 → 11`.
@@ -1303,6 +1303,50 @@ questions before writing code, since the design space had real forks:
   "drag/repositioning not implemented yet" framing (now "ruled out permanently, not
   deferred"), the hit-detection section's drag-repositioning note, and the Phase 8
   move-node bullet (no longer re-bases position itself).
+
+**Auto-layout tuning: one horizontal plane, no more clustering near the origin**
+(`client/src/scene/autoLayout.ts`, `autoLayout.test.ts`, `plan.md`)
+User feedback after trying Phase 7: objects should prefer landing on the same horizontal
+plane (panning/zooming across it is much easier than hunting above or below it), and
+unrelated objects were bunching up near the origin instead of spreading out.
+- **Flat plane, no damping term needed.** `seedPosition` switched from a full
+  golden-angle *sphere* (`y` ranging -1..1) to a flat golden-angle *spiral* (`y=0` for
+  every entity, spread only in x/z) — a "sunflower" disc packing (`ringRadius =
+  sqrt((index+0.5)/count)`) for even area density. Turned out no separate y-damping
+  force was needed at all: every force in `layoutGroup` (repulsion, spring, centering)
+  is derived purely from *relative* positions with no external "up" bias, so once every
+  input starts at y=0, every direction vector derived from those positions also has
+  y=0 — nothing ever pulls an entity off the plane, for the lifetime of the simulation.
+  New tests assert this literally (`pos.y === 0`, no tolerance needed) at both the
+  `layoutGroup` primitive and the full `autoLayoutProject` cascade.
+- **Root cause of the origin-clustering**: the *unconstrained* tier (spaces within a
+  project — the only tier with no parent shell to seed within) scaled its initial seed
+  spread off `entities.length` alone (`entities.length * 0.5`) — for a handful of
+  spaces, 1-2 units, tiny against real space radii (2-10+ via `computeSpaceRadius`).
+  Spaces started deep inside each other, and the existing repulsion force (tuned for
+  local separation, not broad redistribution) was never going to undo that on its own —
+  it mostly just enforces a minimum resting distance, not a "spread out to fill the
+  available room" pressure. Fixed by scaling the fallback spread off the entities' own
+  total radius instead (`Math.max(totalRadius * 0.6, 4)`).
+- **`SEPARATION_PADDING` bumped 0.5 → 2.5** — this constant sets the resting-distance
+  floor between any two entities (`radius + radius + padding`), and turned out to be the
+  main lever controlling how much breathing room the *settled* layout has, not just
+  whether it visually overlaps: repulsion decays fast enough (`1/dist²`) that once two
+  entities clear this floor, there's little pushing them any further apart, so the old
+  0.5 value meant everything settled right at (or barely past) bare non-overlap — reads
+  as "clustered" even with zero actual overlap.
+- New tests in `autoLayout.test.ts`: unconstrained entities end up meaningfully spread
+  (not just non-overlapping) relative to their own size; the same, end-to-end, through
+  `autoLayoutProject` for a project's spaces; y=0 for every layout output at both the
+  primitive and orchestration level. One test initially failed against a `+2` margin
+  (actual: `+1.97`) — rather than loosen the assertion to match, tightened
+  `SEPARATION_PADDING` instead, since the test was catching a real "not quite enough
+  breathing room" gap worth fixing at the source.
+- Verified: `tsc -b && vite build` clean, `oxlint` clean (same 4 pre-existing warnings),
+  113 client tests passing (up from 109 — 4 new). No browser verification done this
+  session (per standing preference) — this one in particular is worth eyeballing, since
+  "does the layout actually look right" isn't something the structural-property tests
+  can fully confirm on their own.
 
 ## TODO — remaining phases
 

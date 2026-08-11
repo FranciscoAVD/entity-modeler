@@ -27,16 +27,27 @@ const SPRING_LENGTH = 3;
 const CENTERING_STRENGTH = 0.01;
 const EPSILON = 0.01;
 
-// Deterministic starting spread (golden-angle sphere point per index) rather than Math.random() —
-// repulsion has no defined direction if two entities start exactly coincident, and a deterministic
-// seed keeps layout reproducible for the same input, which matters for testing.
+// Extra breathing room baked into every pair's resting distance, beyond just not overlapping —
+// without this, unlinked entities settle right at contact, which reads as "everything huddled in
+// one clump" even though nothing is technically overlapping.
+const SEPARATION_PADDING = 2.5;
+
+// Every position starts, and every force stays, in the y=0 plane — new objects land on the same
+// horizontal plane (panning/zooming across it is much easier to navigate than hunting above or
+// below it). This isn't a damping approximation: seeding y=0 for everyone is enough on its own,
+// because every force below (repulsion, spring, centering) is computed purely from relative
+// positions with no external "up" bias — if every input has y=0, every direction vector derived
+// from those positions has y=0 too, so nothing ever pulls an entity off the plane. A flat
+// golden-angle *spiral* (not the old full-sphere distribution) keeps that property from the seed
+// onward, while still giving each entity a distinct starting point (repulsion has no defined
+// direction if two entities start exactly coincident) — deterministic rather than Math.random()
+// so layout stays reproducible for the same input, which matters for testing.
 function seedPosition(index: number, count: number, spread: number): Vector3 {
   if (count <= 1) return { x: 0, y: 0, z: 0 };
   const goldenAngle = Math.PI * (3 - Math.sqrt(5));
-  const y = 1 - (index / (count - 1)) * 2;
-  const ringRadius = Math.sqrt(Math.max(0, 1 - y * y));
   const theta = goldenAngle * index;
-  return scale({ x: Math.cos(theta) * ringRadius, y, z: Math.sin(theta) * ringRadius }, spread);
+  const ringRadius = Math.sqrt((index + 0.5) / count);
+  return scale({ x: Math.cos(theta) * ringRadius, y: 0, z: Math.sin(theta) * ringRadius }, spread);
 }
 
 // Aggregates relationships into weighted links between *groups* — nodeToGroup maps every node id
@@ -74,7 +85,14 @@ export function layoutGroup(
     return positions;
   }
 
-  const spread = (containerRadius ?? entities.length) * 0.5;
+  // With a container, seed within it. Without one (the project tier, laying out spaces with no
+  // parent shell) there's nothing to scale off but the entities themselves — sized by their own
+  // total footprint, not merely their count, so a handful of large spaces still starts spread
+  // out. (Previously scaled off entities.length alone, which for a handful of spaces produced a
+  // seed spread of just 1-2 units against space radii of 2-10+ — everything started deep inside
+  // everything else, and the mild repulsion below was never going to undo that on its own.)
+  const totalRadius = entities.reduce((sum, e) => sum + e.radius, 0);
+  const spread = containerRadius ?? Math.max(totalRadius * 0.6, 4);
   entities.forEach((e, i) => positions.set(e.id, seedPosition(i, entities.length, spread)));
 
   const radiusById = new Map(entities.map((e) => [e.id, e.radius]));
@@ -88,7 +106,7 @@ export function layoutGroup(
         const b = entities[j].id;
         const delta = subtract(positions.get(a)!, positions.get(b)!);
         const dist = Math.max(length(delta), EPSILON);
-        const minDist = radiusById.get(a)! + radiusById.get(b)! + 0.5;
+        const minDist = radiusById.get(a)! + radiusById.get(b)! + SEPARATION_PADDING;
         const push = Math.max(minDist - dist, 0) + REPULSION_STRENGTH / (dist * dist);
         const dir = normalize(delta);
         forces.set(a, add(forces.get(a)!, scale(dir, push)));
