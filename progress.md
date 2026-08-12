@@ -1561,6 +1561,60 @@ outright rather than silently leaving an orphaned-but-still-valid tag behind.
   after removing the last reference to a tag, and that declining it leaves the tag
   intact and still autocompletable.
 
+**Environment variables centralized via `@t3-oss/env-core`, in a new `env/` workspace
+package** (not a plan.md phase — infra, new `env/` package, `server/src/db/connection.ts`,
+`server/src/index.ts`, `client/src/store/api.ts`, `server/package.json`,
+`client/package.json`, root `package.json`)
+User-requested, planned via two rounds of scoping questions before writing code (package
+placement: new workspace package vs. a bare root file; schema scope: server-only vs.
+server+client, whether to include PORT).
+- New `env/` package (sibling to `client`/`server`/`shared`), exporting two subpaths so
+  server-only vars never reach the client bundle: `env/server` (`NODE_ENV`, `DB_FILE`,
+  `PORT`) built on `process.env`, and `env/client` (`VITE_API_URL`, `clientPrefix:
+  "VITE_"`) built on `import.meta.env`. Both validated through the same zod v4 `shared`
+  already uses, via `@t3-oss/env-core`.
+- Wraps three previously hardcoded/unvalidated values: `server/src/db/connection.ts`'s
+  `process.env.DB_FILE` read, `server/src/index.ts`'s hardcoded `port: 3001`, and
+  `client/src/store/api.ts`'s hardcoded `API_BASE = "http://localhost:3001"` — each now
+  reads from the validated `env` object, with the same effective defaults as before
+  (unset `DB_FILE` → `server/data/app.db`; `PORT`/`VITE_API_URL` default to
+  `3001`/`http://localhost:3001`).
+- **Folds in an earlier, still-pending request** ("make sure the database is never
+  in-memory in the real app — it's a file on disk") without touching the test suite:
+  `env/server`'s schema validates `NODE_ENV` as `"development" | "production" | "test"`
+  (default `"development"`), and a one-line guard after `createEnv` throws if
+  `NODE_ENV === "production" && DB_FILE === ":memory:"`. Since nothing previously set
+  `NODE_ENV` anywhere, it defaults to `"development"` everywhere except the real prod
+  path — so `server/package.json`'s `test` script (`DB_FILE=:memory: bun test`) keeps
+  working completely unchanged; only `start` needed `NODE_ENV=production` prefixed onto
+  it for the guard to ever actually fire. `"test"` had to be added to the enum after the
+  first verification run failed — Bun's test runner sets `NODE_ENV=test` automatically,
+  which the original two-value enum didn't account for.
+- `env/tsconfig.json` needed `"types": ["node", "vite/client"]` (plus matching
+  `@types/node`/`vite` devDependencies, the latter only for its ambient `client.d.ts`,
+  never bundled) since the package's own standalone `typecheck` script exercises both
+  `process` (`server.ts`) and `import.meta.env` (`client.ts`) in one program — neither
+  is ambiently available without those types, even though the *consuming* packages
+  (server/client) typechecked fine already, via their own pre-existing `types` arrays.
+- Verified: `env`, `server`, `shared` all `tsc --noEmit` clean; `client` `tsc -b && vite
+  build` clean (same pre-existing chunk-size warning, unrelated) and `oxlint` clean
+  (same 4 pre-existing fast-refresh warnings); 6/6 server tests + 116/116 client tests
+  passing. Guard behavior confirmed live: `NODE_ENV=production DB_FILE=:memory: bun run
+  src/index.ts` throws immediately, before any DB connection is attempted; a normal boot
+  (via an already-running `--hot` dev server that picked up the change automatically)
+  served `GET /` correctly on the default port. No browser verification beyond that (per
+  standing preference) — this pass has no UI surface to check anyway.
+
+**Demo-data seeding gated to `NODE_ENV=development` only** (`server/src/index.ts`)
+Immediate follow-up to the `env/` work above, using the same `NODE_ENV` value: `seedIfEmpty()`
+was called unconditionally on every boot (a no-op once the `projects` table has rows, but still
+ran the empty-check in `production`/`test`). Now `if (env.NODE_ENV === "development")
+seedIfEmpty();` — a real deployment (`start`, which sets `NODE_ENV=production`) never seeds demo
+data, even on a first boot against an empty DB. Doesn't affect test coverage:
+`persistence.test.ts` calls `seedIfEmpty()` directly, not through `index.ts`'s boot path, so its
+own assertions about seeding behavior are untouched.
+Verified: server `tsc --noEmit` clean, 6/6 server tests passing (unchanged).
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see

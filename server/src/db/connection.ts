@@ -3,11 +3,13 @@ import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { env } from "env/server";
 import * as schema from "./schema";
 
 // Overridable so tests can point at an isolated in-memory DB (`DB_FILE=:memory:`) instead of the
-// real dev database at server/data/app.db.
-export const DB_PATH = process.env.DB_FILE ?? new URL("../../data/app.db", import.meta.url).pathname;
+// real dev database at server/data/app.db. env/server rejects DB_FILE=":memory:" outright once
+// NODE_ENV=production, so this fallback is the only path a real deployment ever takes.
+export const DB_PATH = env.DB_FILE ?? new URL("../../data/app.db", import.meta.url).pathname;
 const MIGRATIONS_FOLDER = new URL("../../drizzle", import.meta.url).pathname;
 
 if (DB_PATH !== ":memory:" && !existsSync(dirname(DB_PATH))) mkdirSync(dirname(DB_PATH), { recursive: true });
