@@ -4,9 +4,10 @@ import { loadProjectDetail, loadProjectList } from "./reads";
 import { seedIfEmpty } from "./seed";
 import { deleteProject, upsertProject } from "./writes";
 
-// Runs against an isolated in-memory DB (see package.json's `test` script: DB_FILE=:memory:),
-// not the real dev database — every test below uses its own randomUUID()'d project id so they
-// can safely share that one in-memory DB across the whole file without interfering.
+// Runs against server/data/test.db — a real file, but a dedicated one, wiped before every run by
+// package.json's `test` script (`rm -f data/test.db && bun test`), not the real dev/prod database.
+// Every test below uses its own randomUUID()'d project id so they can safely share that one file
+// across the whole run without interfering.
 
 function minimalProject(id: string, overrides?: Partial<ProjectDetail>): ProjectDetail {
   return {

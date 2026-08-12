@@ -6,13 +6,11 @@ import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { env } from "env/server";
 import * as schema from "./schema";
 
-// Overridable so tests can point at an isolated in-memory DB (`DB_FILE=:memory:`) instead of the
-// real dev database at server/data/app.db. env/server rejects DB_FILE=":memory:" outright once
-// NODE_ENV=production, so this fallback is the only path a real deployment ever takes.
-export const DB_PATH = env.DB_FILE ?? new URL("../../data/app.db", import.meta.url).pathname;
+// One real file per NODE_ENV (dev.db/prod.db/test.db, see env/server) — never :memory:.
+export const DB_PATH = new URL(`../../data/${env.DB_FILE}`, import.meta.url).pathname;
 const MIGRATIONS_FOLDER = new URL("../../drizzle", import.meta.url).pathname;
 
-if (DB_PATH !== ":memory:" && !existsSync(dirname(DB_PATH))) mkdirSync(dirname(DB_PATH), { recursive: true });
+if (!existsSync(dirname(DB_PATH))) mkdirSync(dirname(DB_PATH), { recursive: true });
 
 const sqlite = new Database(DB_PATH);
 // SQLite doesn't enforce foreign keys by default — without this, the onDelete cascade/set-null

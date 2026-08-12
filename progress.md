@@ -1615,6 +1615,66 @@ data, even on a first boot against an empty DB. Doesn't affect test coverage:
 own assertions about seeding behavior are untouched.
 Verified: server `tsc --noEmit` clean, 6/6 server tests passing (unchanged).
 
+**`.env` relocated to `server/`, `NODE_ENV` driven strictly by `.env` files (no script-level
+overrides), and the in-memory DB option removed entirely — one real SQLite file per environment**
+(`env/src/server.ts`, `server/src/db/connection.ts`, `server/src/db/persistence.test.ts`,
+`server/package.json`, `server/data/`)
+Several rounds of follow-up on the `env/` work above, each confirmed with the user before
+implementing.
+- **`.env` moved from the repo root to `server/`.** The user had placed a root-level `.env`
+  (`NODE_ENV=production`); verified empirically (not assumed) that it was silently inert there —
+  both Bun (server, run via `--cwd server`) and Vite (client) auto-load `.env` relative to the
+  *process's own cwd*, not relative to wherever the code that reads `process.env`/`import.meta.env`
+  happens to live. This also answered a related question directly: putting `.env` inside the `env/`
+  workspace package itself wouldn't work either, for the same reason — confirmed with a throwaway
+  `env/.env` test file, read correctly from `env/`'s own cwd but invisible from `server/`'s.
+- **`dev`/`start` scripts no longer set `NODE_ENV` at all** — went through an intermediate state
+  (explicit `NODE_ENV=development`/`NODE_ENV=production` prefixes on each script, to keep `dev`
+  from inheriting `.env`'s `production` value) before the user asked for script-level env vars to
+  be removed entirely, `.env` files only. Confirmed precedence empirically first: a shell-set var
+  does override `.env`, so the interim prefix approach did work — it was still reverted on request,
+  meaning `NODE_ENV` is now sourced 100% from whatever `.env` is present per machine, with no
+  script-side lever to separate dev from prod. Flagged directly to the user: since `server/.env`
+  currently says `production`, `dev` and `start` now resolve identically on this machine unless the
+  file itself is changed.
+- **In-memory DB removed as a concept, not just guarded against.** Previously `DB_FILE` was a
+  freely-settable path (including `:memory:`, blocked only in `NODE_ENV=production` by a
+  post-`createEnv` check). Now there's no `DB_FILE` input at all — `env/server`'s `NODE_ENV`
+  (`"development" | "production" | "test"`) maps through a fixed `DB_FILENAMES` table to
+  `dev.db`/`prod.db`/`test.db`, and `connection.ts` always resolves `server/data/<that name>`, with
+  no override path and no `:memory:` special-casing left anywhere.
+- **`NODE_ENV`'s `.default("development")` removed** — last request in this chain: boot must now
+  fail loudly (`createEnv`'s validation error) if `NODE_ENV` isn't set by *something* (a `.env` file
+  or the environment), rather than silently assuming development. Verified by temporarily moving
+  `server/.env` aside and confirming a bare boot throws `Invalid environment variables` instead of
+  quietly defaulting; `.env` restored immediately after. Bun's test runner setting `NODE_ENV=test`
+  automatically means the test suite was never at risk from this change.
+- **`server/package.json`'s `test` script reworked for a real file, not `:memory:`.** Since
+  `test.db` is now a persistent file rather than something that resets for free every run, the
+  script gained an explicit wipe step: `"test": "rm -f data/test.db && bun test"` — verified by
+  running the suite twice in a row and confirming both runs pass identically (the earlier
+  session-documented "stray test rows in the real dev DB" bug was exactly this class of problem;
+  the wipe step is what prevents a recurrence now that tests write to disk).
+- **Existing data preserved, not orphaned**: `server/data/app.db` (the file the old
+  no-`DB_FILE`-set default pointed at) renamed to `server/data/dev.db` rather than left to rot
+  under a name nothing references anymore.
+- **Stray artifact caught and cleaned up mid-session**: the user's own already-running `--hot` dev
+  server (left running from earlier in the session, not something this session started) picked up
+  the `env.ts`/`connection.ts` edits live via hot-reload, and — transiently, from reloading the two
+  changed files out of sync with each other — wrote a real SQLite file literally named
+  `server/data/undefined` (new `connection.ts` code evaluating `env.DB_FILE` against a not-yet-
+  reloaded old `env/server` module). Deleted; confirmed as a hot-reload artifact, not a defect in
+  the settled code, since a fresh (non-`--hot`) verification of the same code path resolved
+  correctly to `dev.db`/`prod.db` as expected. The background server itself was left running
+  (not this session's process to kill), with a note to the user that it should self-correct on its
+  next reload.
+- Verified end-to-end, each step: `env`/`server` `tsc --noEmit` clean throughout; 6/6 server tests
+  passing at every stage (including the final `NODE_ENV`-required state); `DB_PATH` resolution
+  spot-checked directly (`development` → `.../data/dev.db`, `.env`'s `production` →
+  `.../data/prod.db`) via short-lived `bun -e` dynamic imports rather than relying on the
+  already-running background server, to avoid the port-3001 conflict with it. No browser
+  verification (per standing preference) — this pass has no UI surface to check.
+
 ## TODO — remaining phases
 
 **Phase 9 — Persistence** (read/write, seeding, migrations, and autosave all done, see
